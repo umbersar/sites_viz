@@ -1,6 +1,7 @@
 library(shiny)
 library(shinydashboard)
 library(leaflet)
+library(leaflet.extras)
 library(dplyr)
 
 
@@ -133,7 +134,7 @@ ui <- dashboardPage(
         # map
         fixedRow(
           box(
-            width = 12,
+            width = 10,
             title = "section for map",
             leafletOutput("lab_results_map", width = "100%", height = "800")
           )
@@ -279,7 +280,19 @@ server <- function(input, output, session) {
     get_geo_locations() %>%
       leaflet() %>%
       addTiles() %>%  # Add default OpenStreetMap map tiles
-      addMarkers(clusterOptions = markerClusterOptions()) 
+      addMarkers(clusterOptions = markerClusterOptions()) %>%
+      addDrawToolbar(
+        targetGroup = 'Selected',
+        polylineOptions = FALSE,
+        markerOptions = FALSE,
+        polygonOptions = drawPolylineOptions(
+                            shapeOptions = drawShapeOptions(
+                              fillOpacity = 0,
+                              color = 'white',
+                              weight = 3
+                            ))
+      )
+      
   )
 }
 
