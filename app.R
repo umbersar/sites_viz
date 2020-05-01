@@ -134,7 +134,7 @@ ui <- dashboardPage(
         # map
         fixedRow(
           box(
-            width = 10,
+            width = 12,
             title = "section for map",
             leafletOutput("lab_results_map", width = "100%", height = "800")
           )
@@ -155,7 +155,7 @@ ui <- dashboardPage(
             # Pie Chart for Project Code
             plotOutput("bar_agency_code")
           )
-        ),
+        )
       ),
       
       
