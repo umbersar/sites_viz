@@ -41,7 +41,10 @@ morph_attrs <- c(
 
 
 #########################################################################################################
+############################################## ui #######################################################
 #########################################################################################################
+
+
 ui <- dashboardPage(
   skin = "black",
   dashboardHeader(title = "Soil Data Explorer"),
@@ -125,18 +128,19 @@ ui <- dashboardPage(
         # data display of the selected morphology data
         fixedRow(
           box(
-            width = 12,
-            title = "Data Display -- Filtered Dataset",
-            DT::dataTableOutput('morph_data')
-          )  
-        ),
-        
-        # map
-        fixedRow(
-          box(
-            width = 12,
             title = "section for map",
-            leafletOutput("lab_results_map", width = "100%", height = "800")
+            leafletOutput("lab_results_map", width = "100%", height = "540px"),
+            height = "600px",
+            width = 4,
+            solidHeader = TRUE
+          ),
+          box(
+            title = "Data Display -- Filtered Dataset",
+            DT::dataTableOutput('morph_data'),
+            height = "600px",
+            id = "datatable",
+            width = 8,
+            solidHeader = TRUE
           )
         ),
         
@@ -176,7 +180,10 @@ ui <- dashboardPage(
 
 
 #########################################################################################################
+############################################ server #####################################################
 #########################################################################################################
+
+
 server <- function(input, output, session) {
   # -------------------------------------------------------------------------- #
   # load lab results for the selected morphology attribute
@@ -212,12 +219,12 @@ server <- function(input, output, session) {
     if (input$filter_checkbox) {
       DT::datatable(
         dplyr::filter(morphData(), (!!sym(input$filter_attr)) == input$filter_val), 
-        options = list(pageLength = 25)
+        options = list(pageLength = 10, scrollX = TRUE)
       )
     } else {
       DT::datatable(
         morphData(),
-        options = list(pageLength = 25)
+        options = list(pageLength = 10, scrollX = TRUE)
       )
     }
   })
@@ -280,19 +287,7 @@ server <- function(input, output, session) {
     get_geo_locations() %>%
       leaflet() %>%
       addTiles() %>%  # Add default OpenStreetMap map tiles
-      addMarkers(clusterOptions = markerClusterOptions()) %>%
-      addDrawToolbar(
-        targetGroup = 'Selected',
-        polylineOptions = FALSE,
-        markerOptions = FALSE,
-        polygonOptions = drawPolylineOptions(
-                            shapeOptions = drawShapeOptions(
-                              fillOpacity = 0,
-                              color = 'white',
-                              weight = 3
-                            ))
-      )
-      
+      addMarkers(clusterOptions = markerClusterOptions())
   )
 }
 
