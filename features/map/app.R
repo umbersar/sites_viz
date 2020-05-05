@@ -10,6 +10,8 @@ library(leaflet)
 library(leaflet.extras)
 library(sp)
 library(dplyr)
+library(leafgl)
+library(sf)
 
 
 longitutde <- "o_longitude_GDA94"
@@ -17,17 +19,17 @@ latitude <- "o_latitude_GDA94"
 
 # data course
 myData <- read.csv('../../data/o_elevation.csv')
-myData <- select(myData, "X", longitutde, latitude)[2000:3000, ]
+myData <- na.omit(select(myData, "X", longitutde, latitude))
+pts <- st_as_sf(myData, coords = c(longitutde, latitude))
 
 # generate second set of unique location IDs for second layer of selected locations
 myData$secondLocationID <- paste(as.character(myData$X), "_selectedLayer", sep="")
 
 coordinates <- SpatialPointsDataFrame(myData[, c(longitutde, latitude)], myData)
 
-head(myData)
-
 shinyApp(
   ui <- fluidPage(
+    textOutput("simple"),
     leafletOutput("mymap", height = "1050")
   ),
   
@@ -35,7 +37,8 @@ shinyApp(
     ##################################################################################
     # section one
     # list to store the selections for tracking
-    data_of_click <- reactiveValues(clickedMarkers = list())
+    data_of_click <- reactiveValues(clickedMarker = list())
+    output_text <- reactiveValues(text = "")
 
     ##################################################################################
     # section two
@@ -43,24 +46,23 @@ shinyApp(
     output$mymap <- renderLeaflet({
       leaflet() %>%
         addTiles() %>%
-        addCircles(
-          data = myData,
+        addGlPoints(
+          data = pts,
+          group = "pts",
           radius = 10,
-          lat = myData$o_latitude_GDA94,
-          lng = myData$o_longitude_GDA94,
-          fillColor = "white",
+          fillColor = "black",
           fillOpacity = "1",
-          color = "hotpink",
           weight = 2,
           stroke = T,
           layerId = as.character(myData$X),
           highlightOptions = highlightOptions(
-            color = "mediumseagreen",
+            fillColor = "red",
             opacity = 1.0,
             weight = 2,
             bringToFront = TRUE
           )
         ) %>%
+        # addGlPoints(data = pts, group="pts") %>%
         addDrawToolbar(
           targetGroup = 'Selected',
           polylineOptions = FALSE,
@@ -90,7 +92,8 @@ shinyApp(
             edit = FALSE,
             selectedPathOptions = selectedPathOptions()
           )
-        )
+        ) %>%
+        addStyleEditor()
     })
     
     ##################################################################################  
@@ -161,6 +164,17 @@ shinyApp(
       }
     })
     
+    observeEvent(input$mymap_zoom, {
+      output$simple <- renderText(
+        paste0("(", paste(
+          input$mymap_bounds$north, 
+          input$mymap_bounds$east, 
+          input$mymap_bounds$south, 
+          input$mymap_bounds$west,
+          sep = ", "), ")"
+        )
+      )
+    })
     ##################################################################################
     # section five
     # findLocations function
