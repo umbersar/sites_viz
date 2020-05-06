@@ -3,14 +3,48 @@ library(shinydashboard)
 library(leaflet)
 library(leaflet.extras)
 library(dplyr)
+library(leaflet.extras)
+library(leafgl)
+library(sf)
+library(sp)
 
 
-geo_long <- "o_longitude_GDA94"
-geo_lat <- "o_latitude_GDA94"
+###############################################################################
+############################### parameters  ###################################
+###############################################################################
 
-# -------------------------------------------------------------------------- #
-# helper functions
-# -------------------------------------------------------------------------- #
+
+###############################################################################
+########################### data preparation ##################################
+###############################################################################
+
+
+longitutde <- "o_longitude_GDA94"
+latitude <- "o_latitude_GDA94"
+
+morph_meta <- read.csv("data/morph_metadata.csv")
+
+# using morphology attribute name to load the corresponding .csv file
+# for the time being, we are only testing with a small subset
+morph_attrs <- c(
+  "cf_shape", 
+  "crack_width", 
+  "h_texture", 
+  "o_drainage", 
+  "o_elevation", 
+  "s_patt_type", 
+  "samp_upper_depth", 
+  "scf_strength"
+)
+# uncomment the following to work with the full set of attribute names
+# morph_attrs <- morph_meta %>% select("Morphology_Class_Attribute")
+
+
+###############################################################################
+########################### helper functions ##################################
+###############################################################################
+
+
 col_has_val <- function(col, val="N/A") {
   for(i in 1:length(col)) {
     if(is.na(col[i])){
@@ -23,26 +57,10 @@ col_has_val <- function(col, val="N/A") {
   return(FALSE)
 }
 
-# -------------------------------------------------------------------------- #
-# load all the available morphology class attribtues
-# -------------------------------------------------------------------------- #
-morph_meta <- read.csv("data/morph_metadata.csv")
-# morph_attrs <- morph_meta %>% select("Morphology_Class_Attribute")
-morph_attrs <- c(
-  "cf_shape", 
-  "crack_width", 
-  "h_texture", 
-  "o_drainage", 
-  "o_elevation", 
-  "s_patt_type", 
-  "samp_upper_depth", 
-  "scf_strength"
-)
 
-
-#########################################################################################################
-############################################## ui #######################################################
-#########################################################################################################
+###############################################################################
+################################# ui ##########################################
+###############################################################################
 
 
 ui <- dashboardPage(
@@ -62,9 +80,9 @@ ui <- dashboardPage(
   # body  
   dashboardBody(
     tabItems(
-      # -------------------------------------------------------------------------- #
+      # --------------------------------------------------------------------- #
       # About Page
-      # -------------------------------------------------------------------------- #
+      # --------------------------------------------------------------------- #
       tabItem(
         tabName = "about",
         fluidRow(
@@ -78,9 +96,9 @@ ui <- dashboardPage(
         )),
       
       
-      # -------------------------------------------------------------------------- #
+      # --------------------------------------------------------------------- #
       # Explore Page
-      # -------------------------------------------------------------------------- #
+      # --------------------------------------------------------------------- #
       tabItem(
         tabName = "explore",
         # select morphology class attribute and then
@@ -100,7 +118,10 @@ ui <- dashboardPage(
             ),
             
             # decide if we need to apply filtering or not
-            checkboxInput("filter_checkbox", "Check the Box to Filter Data", value = FALSE, width = "100%"),
+            checkboxInput("filter_checkbox", 
+                          "Check the Box to Filter Data", 
+                          value = FALSE, 
+                          width = "100%"),
             selectizeInput(
               inputId = "filter_attr", 
               label = "Filter dataset based on values of a column", 
@@ -131,7 +152,7 @@ ui <- dashboardPage(
             title = "section for map",
             leafletOutput("lab_results_map", width = "100%", height = "540px"),
             height = "600px",
-            width = 4,
+            width = 5,
             solidHeader = TRUE
           ),
           box(
@@ -139,7 +160,7 @@ ui <- dashboardPage(
             DT::dataTableOutput('morph_data'),
             height = "600px",
             id = "datatable",
-            width = 8,
+            width = 7,
             solidHeader = TRUE
           )
         ),
@@ -163,9 +184,9 @@ ui <- dashboardPage(
       ),
       
       
-      # -------------------------------------------------------------------------- #
+      # --------------------------------------------------------------------- #
       # Settings Page
-      # -------------------------------------------------------------------------- #
+      # --------------------------------------------------------------------- #
       tabItem(
         tabName = "settings",
         fluidRow(
@@ -179,22 +200,25 @@ ui <- dashboardPage(
 )
 
 
-#########################################################################################################
-############################################ server #####################################################
-#########################################################################################################
+###############################################################################
+############################### server ########################################
+###############################################################################
 
 
 server <- function(input, output, session) {
-  # -------------------------------------------------------------------------- #
-  # load lab results for the selected morphology attribute
-  # -------------------------------------------------------------------------- #
+  # ------------------------------------------------------------------------- #
+  # reactive function for loading lab results for the 
+  # selected morphology attribute
+  # ------------------------------------------------------------------------- #
   morphData <- reactive({
     data <- read.csv(stringr::str_interp("data/${input$morph_attr}.csv"))
+    # omit columns whose only value is "N/A"
     filtered <- data %>% 
       select_if(function(col) return(!col_has_val(col))) %>%
       select(-"morphology_attribute", -"X")
     return(filtered)
   })
+  
   
   # trigger shiny to update choices for the selectizeInput, "filter_attr"
   observeEvent(morphData(), {
@@ -229,19 +253,19 @@ server <- function(input, output, session) {
     }
   })
   
-  output$summary <- renderPrint({
-    if (input$filter_checkbox) {
-      dplyr::filter(morphData(), (!!sym(input$filter_attr)) == input$filter_val) %>%
-        select(-input$filter_attr) %>%
-        summary()
-    } else {
-      summary(morphData())
-    }
-  })
+  # output$summary <- renderPrint({
+  #   if (input$filter_checkbox) {
+  #     dplyr::filter(morphData(), (!!sym(input$filter_attr)) == input$filter_val) %>%
+  #       select(-input$filter_attr) %>%
+  #       summary()
+  #   } else {
+  #     summary(morphData())
+  #   }
+  # })
   
-  # -------------------------------------------------------------------------- #
+  # ------------------------------------------------------------------------- #
   # plots
-  # -------------------------------------------------------------------------- #
+  # ------------------------------------------------------------------------- #
   
   output$scatter_morph_attr_lat <- renderPlot({
     plot(
@@ -269,16 +293,16 @@ server <- function(input, output, session) {
     )
   })
   
-  # -------------------------------------------------------------------------- #
+  # ------------------------------------------------------------------------- #
   # map
-  # -------------------------------------------------------------------------- #
+  # ------------------------------------------------------------------------- #
   get_geo_locations <- reactive({
     if (input$filter_checkbox) {
       data <- dplyr::filter(morphData(), (!!sym(input$filter_attr)) == input$filter_val)
     } else {
       data <- morphData()
     }
-    data <- data %>% select(geo_long, geo_lat)
+    data <- data %>% select(longitutde, latitude)
     names(data) <- c("lng", "lat")
     return(data)
   })
