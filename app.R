@@ -150,7 +150,7 @@ ui <- dashboardPage(
         fixedRow(
           box(
             title = "section for map",
-            leafletOutput("lab_results_map", width = "100%", height = "540px"),
+            leafletOutput("morph_map", width = "100%", height = "540px"),
             height = "600px",
             width = 5,
             solidHeader = TRUE
@@ -210,18 +210,30 @@ server <- function(input, output, session) {
   # reactive function for loading lab results for the 
   # selected morphology attribute
   # ------------------------------------------------------------------------- #
-  morphData <- reactive({
+  
+  # load whole morphology dataset from .csv file
+  loadData <- reactive({
     data <- read.csv(stringr::str_interp("data/${input$morph_attr}.csv"))
-    # omit columns whose only value is "N/A"
-    filtered <- data %>% 
+    filtered <- data %>%
       select_if(function(col) return(!col_has_val(col))) %>%
-      select(-"morphology_attribute", -"X")
+      select(-"morphology_attribute")
     return(filtered)
   })
   
+  # filter out the "X" column to give us the morphology data
+  morphData <- reactive({
+    return(loadData() %>% select(-"X"))
+  })
+  
+  loadMapData <- reactive({
+    data <- na.omit(loadData() %>% select("X", longitutde, latitude))
+    data$layerID <- paste(as.character(data$X), "_sl", sep="")
+    pts <- st_as_sf(data, coords=c(longitutde, latitude))
+    return(list(data=data, pts=pts))
+  })
   
   # trigger shiny to update choices for the selectizeInput, "filter_attr"
-  observeEvent(morphData(), {
+  observeEvent(loadData(), {
     choices <- unique(names(morphData()))
     updateSelectInput(session, "filter_attr", choices = choices)
   })
@@ -243,76 +255,251 @@ server <- function(input, output, session) {
     if (input$filter_checkbox) {
       DT::datatable(
         dplyr::filter(morphData(), (!!sym(input$filter_attr)) == input$filter_val), 
-        options = list(pageLength = 10, scrollX = TRUE)
+        options = list(
+          pageLength = 10, 
+          scrollX = TRUE,
+          ordering = FALSE,
+          autoWidth = TRUE,
+          info = FALSE
+        )
       )
     } else {
       DT::datatable(
         morphData(),
-        options = list(pageLength = 10, scrollX = TRUE)
+        options = list(
+          pageLength = 10, 
+          scrollX = TRUE,
+          ordering = FALSE,
+          autoWidth = TRUE,
+          info = FALSE
+        )
       )
     }
   })
   
-  # output$summary <- renderPrint({
-  #   if (input$filter_checkbox) {
-  #     dplyr::filter(morphData(), (!!sym(input$filter_attr)) == input$filter_val) %>%
-  #       select(-input$filter_attr) %>%
-  #       summary()
-  #   } else {
-  #     summary(morphData())
-  #   }
-  # })
   
   # ------------------------------------------------------------------------- #
   # plots
   # ------------------------------------------------------------------------- #
   
-  output$scatter_morph_attr_lat <- renderPlot({
-    plot(
-      morphData()$o_latitude_GDA94, 
-      morphData()$morphology_attribute_value, 
-      xlab = "Latitude", 
-      ylab = "Morphology Attribute Value (Elevation)",
-      main = "Morphology Attribute Value Against Latitude")
-  })
-  
-  output$boxplot_morph_attr <- renderPlot({
-    boxplot(
-      morphData()$morphology_attribute_value, 
-      main = "Morphology Attribute Values Box Plot"
-    )
-  })
-  
-  
-  output$bar_agency_code <- renderPlot({
-    result = plyr::count(morphData(), "agency_code")
-     barplot(
-      result$freq,
-      names.arg = result$agency_code,
-      main = "Number of Projects by Agency"
-    )
-  })
+  # output$scatter_morph_attr_lat <- renderPlot({
+  #   plot(
+  #     morphData()$o_latitude_GDA94, 
+  #     morphData()$morphology_attribute_value, 
+  #     xlab = "Latitude", 
+  #     ylab = "Morphology Attribute Value (Elevation)",
+  #     main = "Morphology Attribute Value Against Latitude")
+  # })
+  # 
+  # output$boxplot_morph_attr <- renderPlot({
+  #   boxplot(
+  #     morphData()$morphology_attribute_value, 
+  #     main = "Morphology Attribute Values Box Plot"
+  #   )
+  # })
+  # 
+  # 
+  # output$bar_agency_code <- renderPlot({
+  #   result = plyr::count(morphData(), "agency_code")
+  #    barplot(
+  #     result$freq,
+  #     names.arg = result$agency_code,
+  #     main = "Number of Projects by Agency"
+  #   )
+  # })
   
   # ------------------------------------------------------------------------- #
   # map
   # ------------------------------------------------------------------------- #
-  get_geo_locations <- reactive({
-    if (input$filter_checkbox) {
-      data <- dplyr::filter(morphData(), (!!sym(input$filter_attr)) == input$filter_val)
-    } else {
-      data <- morphData()
-    }
-    data <- data %>% select(longitutde, latitude)
-    names(data) <- c("lng", "lat")
-    return(data)
+  
+  data_of_click <- reactiveValues(clickedMarker = list())
+  mapData <- reactiveValues(
+    data=NULL,
+    pts=NULL,
+    coordinates=NULL
+  )
+  
+  observeEvent(loadData(), {
+    map_data <- loadMapData()
+    mapData$data <- map_data$data
+    mapData$pts <- map_data$pts
+    mapData$coordinates <- SpatialPointsDataFrame(
+      mapData$data[, c(longitutde, latitude)], 
+      mapData$data
+    )
+    output$morph_map <- renderLeaflet(
+      leaflet() %>%
+        addTiles(options = tileOptions(minZoom=2, maxZoom=12)) %>%
+        setView(lng = 134, lat = -24, zoom = 2) %>%
+        addGlPoints(
+          data = mapData$pts,
+          group = "pts",
+          radius = 5,
+          fillColor = "black",
+          fillOpacity = 1,
+          weight = 2,
+          stroke = T,
+          layerId = as.character(mapData$X),
+          highlightOptions = highlightOptions(
+            fillColor = "red",
+            weight = 10,
+            bringToFront = TRUE
+          )
+        ) %>%
+        addDrawToolbar(
+          targetGroup = 'Selected',
+          polylineOptions = FALSE,
+          markerOptions = FALSE,
+          circleMarkerOptions = FALSE,
+          polygonOptions = drawPolygonOptions(
+            shapeOptions = drawShapeOptions(
+              fillOpacity = 0,
+              color = "white",
+              weight = 3
+            )
+          ),
+          rectangleOptions = drawRectangleOptions(
+            shapeOptions = drawShapeOptions(
+              fillOpacity = 0,
+              color = "white",
+              weight = 3
+            )
+          ),
+          circleOptions = drawCircleOptions(
+            shapeOptions = drawShapeOptions(
+              fillOpacity = 0,
+              color = "white",
+              weight = 3
+            )
+          ),
+          editOptions = editToolbarOptions(
+            edit = FALSE,
+            selectedPathOptions = selectedPathOptions()
+          )
+        ) 
+    )
   })
   
-  output$lab_results_map <- renderLeaflet(
-    get_geo_locations() %>%
-      leaflet() %>%
-      addTiles() %>%  # Add default OpenStreetMap map tiles
-      addMarkers(clusterOptions = markerClusterOptions())
-  )
+  # draw new shape
+  observeEvent(input$morph_map_draw_new_feature, {
+    # only add new layers for bounded locations
+    found_in_bounds <- findLocations(
+      shape = input$morph_map_draw_new_feature,
+      location_coordinates = mapData$coordinates,
+      location_id_colname = "X"
+    )
+    
+    for (id in found_in_bounds) {
+      if (id %in% data_of_click$clickedMarker) {
+        # do not add id
+      } 
+      else {
+        # add id
+        data_of_click$clickedMarker <- append(
+          data_of_click$clickedMarker, id, 0
+        )  
+      }
+    }
+    
+    # look up data points by ids found
+    selected <- subset(mapData$data, X %in% data_of_click$clickedMarker)
+    selected_pts <- st_as_sf(selected, coords = c(longitutde, latitude))
+    proxy <- leafletProxy("morph_map")
+    proxy %>% 
+      addCircles(
+        data = selected_pts,
+        radius = 5,
+        fillOpacity = 1,
+        color = "red",
+        weight = 3,
+        stroke = T,
+        layerId = as.character(selected$layerID),
+        highlightOptions = highlightOptions(
+          bringToFront = TRUE
+        )
+      )
+  })
+  
+  # delete shape(s)
+  observeEvent(input$morph_map_draw_deleted_features, {
+    # loop through list of one or more deleted features/polygons
+    for (feature in input$morph_map_draw_deleted_features$features) {
+      # get ids for locations within the bounding shape
+      bounded_layer_ids <- findLocations(
+        shape = feature,
+        location_coordinates = mapData$coordinates,
+        location_id_colname = "layerID"
+      )
+      
+      # remove second layer representing selected locations
+      proxy <- leafletProxy("morph_map")
+      proxy %>% removeShape(layerId = bounded_layer_ids)
+      
+      first_layer_ids <- subset(mapData$data, layerID %in% bounded_layer_ids)$X
+      
+      data_of_click$clickedMarker <- data_of_click$clickedMarker[
+        !data_of_click$clickedMarker %in% first_layer_ids
+      ]
+    }
+  })
+  
+  findLocations <- function(shape, location_coordinates, location_id_colname) {
+    # derive polygon coordinates and feature_type from shape input
+    polygon_coordinates <- shape$geometry$coordinates
+    feature_type <- shape$properties$feature_type
+    
+    if (feature_type %in% c("rectangle", "polygon")) {
+      # transform into a spatial polygon
+      drawn_polygon <- Polygon(
+        do.call(
+          rbind, 
+          lapply(polygon_coordinates[[1]], 
+                 function(x){
+                   c(x[[1]][1], x[[2]][1])
+                 }
+          )
+        )
+      )
+      
+      # use 'over' from the sp package to identify selected locations
+      selected_locs <- sp::over(
+        location_coordinates,
+        sp::SpatialPolygons(list(sp::Polygons(list(drawn_polygon), "drawn_polygon")))
+      )
+      
+      # get ids
+      x = (location_coordinates[
+        which(!is.na(selected_locs)), location_id_colname
+        ]
+      )
+      selected_loc_id = as.character(x[[location_id_colname]])
+      
+      return (selected_loc_id)
+    } 
+    else if (feature_type == "circle") {
+      center_coords <- matrix(
+        c(polygon_coordinates[[1]], polygon_coordinates[[2]]), 
+        ncol = 2
+      )
+      # get distances to center of drawn circle for all locations in location_coordinates
+      # distance is in kilometers
+      dist_to_center <- spDistsN1(
+        location_coordinates, 
+        center_coords, 
+        longlat = TRUE
+      )
+      
+      # get location ids
+      # radius in meters
+      x <- location_coordinates[
+        dist_to_center < shape$properties$radius/1000, 
+        location_id_colname
+      ]
+      
+      selected_loc_id = as.character(x[[location_id_colname]])
+      return(selected_loc_id)
+    }
+  }
 }
 
 shinyApp(ui, server)

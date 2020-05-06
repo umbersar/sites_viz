@@ -88,7 +88,7 @@ shinyApp(
             )
           ),
           editOptions = editToolbarOptions(
-            edit = TRUE,
+            edit = FALSE,
             selectedPathOptions = selectedPathOptions()
           )
         ) 
@@ -155,9 +155,6 @@ shinyApp(
     # section four
     observeEvent(input$mymap_draw_deleted_features, {
       # loop through list of one or more deleted features/polygons
-      output$debug <- renderText(
-        "delete event detected"
-      )
       for (feature in input$mymap_draw_deleted_features$features) {
         # get ids for locations within the bounding shape
         bounded_layer_ids <- findLocations(
@@ -236,34 +233,4 @@ shinyApp(
   
   options = list(height = 1000)
 )
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
