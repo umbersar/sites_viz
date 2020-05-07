@@ -20,9 +20,7 @@ latitude <- "o_latitude_GDA94"
 # data course
 myData <- read.csv('../../data/o_elevation.csv')
 myData <- na.omit(select(myData, "X", longitutde, latitude))
-
-# generate second set of unique location IDs for second layer of selected locations
-myData$layerID <- paste(as.character(myData$X), "_sl", sep="")
+myData[, "layerID"] <- NA
 pts <- st_as_sf(myData, coords = c(longitutde, latitude))
 
 coordinates <- SpatialPointsDataFrame(myData[, c(longitutde, latitude)], myData)
@@ -31,15 +29,18 @@ shinyApp(
   ui <- fluidPage(
     verbatimTextOutput("simple"),
     leafletOutput("mymap", height = "800"),
-    verbatimTextOutput("debug")
+    verbatimTextOutput("debug"),
+    verbatimTextOutput("debug2")
   ),
   
   server <- function(input, output) {
     ##################################################################################
     # section one
     # list to store the selections for tracking
-    data_of_click <- reactiveValues(clickedMarker = list())
-    output_text <- reactiveValues(text = "")
+    data_of_click <- reactiveValues(
+      clickedMarker = list(),
+      layerCount = 0
+    )
 
     ##################################################################################
     # section two
@@ -49,7 +50,6 @@ shinyApp(
         addTiles() %>%
         addGlPoints(
           data = pts,
-          group = "pts",
           radius = 5,
           fillColor = "black",
           fillOpacity = 1,
@@ -62,10 +62,12 @@ shinyApp(
             bringToFront = TRUE
           )
         ) %>%
+        setView(lng = 133, lat = -24, zoom = 7) %>%
         addDrawToolbar(
           targetGroup = 'Selected',
           polylineOptions = FALSE,
           markerOptions = FALSE,
+          circleMarkerOptions = FALSE,
           polygonOptions = drawPolygonOptions(
             shapeOptions = drawShapeOptions(
               fillOpacity = 0,
@@ -99,56 +101,47 @@ shinyApp(
     # events
     observeEvent(input$mymap_draw_new_feature, {
       # only add new layers for bounded locations
+      data_of_click$layerCount <- data_of_click$layerCount + 1
+      
       found_in_bounds <- findLocations(
         shape = input$mymap_draw_new_feature,
         location_coordinates = coordinates,
         location_id_colname = "X"
       )
-      
       for (id in found_in_bounds) {
         if (id %in% data_of_click$clickedMarker) {
           # do not add id
         } 
         else {
           # add id
-          data_of_click$clickedMarker <- append(data_of_click$clickedMarker, id, 0)  
+          data_of_click$clickedMarker <- append(data_of_click$clickedMarker, id, 0)
+          # add a new layerID
+          myData$layerID[id] <- data_of_click$layerCount
         }
       }
       
-      output$debug <-renderText(
-        as.character(data_of_click$clickedMarker)
-      )
+      # add a new layer for the selected region
       
       # look up data points by ids found
       selected <- subset(myData, X %in% data_of_click$clickedMarker)
       selected_pts <- st_as_sf(selected, coords = c(longitutde, latitude))
-      proxy <- leafletProxy("mymap")
-      proxy %>% 
-      addCircles(
+      layerID <- as.character(data_of_click$layerCount)
+      
+      output$debug <- renderText(
+        layerID
+      )
+      
+      leafletProxy("mymap") %>% 
+      addGlPoints(
         data = selected_pts,
         radius = 5,
-        fillOpacity = 1,
-        color = "red",
+        fillColor = "red",
+        fillOpacity = "1",
         weight = 3,
         stroke = T,
-        layerId = as.character(selected$layerID),
-        highlightOptions = highlightOptions(
-          bringToFront = TRUE
-        )
+        # layerId = as.character(data_of_click$layerCount)
+        layerId = layerID
       )
-      # addGlPoints(
-      #   data = selected_pts,
-      #   group = "pts",
-      #   radius = 5,
-      #   fillColor = "red",
-      #   fillOpacity = "1",
-      #   weight = 3,
-      #   stroke = T,
-      #   layerId = "drawn",
-      #   highlightOptions = highlightOptions(
-      #     bringToFront = TRUE
-      #   )
-      # )
     })
     
     ##################################################################################
@@ -160,20 +153,16 @@ shinyApp(
         bounded_layer_ids <- findLocations(
           shape = feature,
           location_coordinates = coordinates,
-          location_id_colname = "layerID"
+          location_id_colname = "X"
         )
         
-        output$debug <-renderText(
-          bounded_layer_ids
-        )
         # remove second layer representing selected locations
         proxy <- leafletProxy("mymap")
-        proxy %>% removeShape(layerId = bounded_layer_ids)
+        # proxy %>% removeShape(layerId = bounded_layer_ids)
+        proxy %>% removeGlPoints(layerId = data_of_click$layerCount)
         
-        first_layer_ids <- subset(myData, layerID %in% bounded_layer_ids)$X
-
         data_of_click$clickedMarker <- data_of_click$clickedMarker[
-          !data_of_click$clickedMarker %in% first_layer_ids
+          !data_of_click$clickedMarker %in% bounded_layer_ids
         ]
       }
     })
@@ -211,7 +200,7 @@ shinyApp(
         
         # get ids
         x = (location_coordinates[which(!is.na(selected_locs)), location_id_colname])
-        selected_loc_id = as.character(x[[location_id_colname]])
+        selected_loc_id = x[[location_id_colname]]
         
         return (selected_loc_id)
       } 
@@ -224,8 +213,8 @@ shinyApp(
         # get location ids
         # radius in meters
         x <- location_coordinates[dist_to_center < shape$properties$radius/1000, location_id_colname]
+        selected_loc_id = x[[location_id_colname]]
         
-        selected_loc_id = as.character(x[[location_id_colname]])
         return(selected_loc_id)
       }
     }

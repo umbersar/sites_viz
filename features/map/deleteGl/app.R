@@ -9,50 +9,42 @@ polys <- st_transform(st_buffer(st_transform(st_as_sf(breweries91[1,]), 3035), 5
 
 ui <- fluidPage(
   leafglOutput("map")
-  ,actionButton("remove_lns", "Remove Glify Lines")
   ,hr()
-  ,actionButton("remove_pts", "Remove Glify Points")
+  ,actionButton("remove_red_pts", "Remove Glify Red Points")
   ,hr()
-  ,actionButton("remove_pol", "Remove Glify Polygons")
-  ,hr()
-  ,actionButton("clear", "Clear all Glify Layers")
+  ,actionButton("remove_black_pts", "Remove Glify Black Polygons")
 )
 
 m = leaflet() %>%
-  addProviderTiles(provider = providers$CartoDB.DarkMatter) %>%
-  addGlPoints(data = breweries91, layerId = "points", group = "pointsgroup", col=cbind(10, 0.2, 10)) %>%
-  addGlPolylines(data = lines, popup = "FGN", layerId = "lines", group = "linesgroup") %>%
-  addGlPolygons(data = polys, layerId = "polys", group = "polygroup", col=cbind(30, 0.2, 10)) %>% 
-  setView(lng = 10.5, lat = 49.5, zoom = 5) %>% 
-  addLayersControl(overlayGroups = c("pointsgroup","linesgroup","polygroup"))
+  addTiles() %>%
+  addGlPoints(
+    data = breweries91, 
+    layerId = "1", 
+    fillColor = "red",
+    radius = 10
+  ) %>%
+  addGlPoints(
+    data = breweries91, 
+    layerId = "2", 
+    fillColor = "black",
+    radius = 5
+  ) %>%
+  setView(lng = 10.5, lat = 49.5, zoom = 5)
 
 server <- function(input, output, session) {
   output$map <- renderLeaflet({m})
   
-  ## Remove Lines by layerId
-  observeEvent(input$remove_lns, {
+  ## Remove Red Points by layerId
+  observeEvent(input$remove_red_pts, {
     leafletProxy("map") %>% 
-      removeGlPolylines(layerId = "lines")
-  })
-  
-  ## Remove Points by layerId
-  observeEvent(input$remove_pts, {
-    leafletProxy("map") %>% 
-      removeGlPoints(layerId = "points")
+      removeGlPoints(layerId = "1")
   })  
-  
-  ## Remove Polygons by layerId
-  observeEvent(input$remove_pol, {
+
+  ## Remove Black Points by layerId
+  observeEvent(input$remove_black_pts, {
     leafletProxy("map") %>% 
-      removeGlPolygons(layerId = "polys")
-  })
-  
-  ## Clear all Glify Layers (category = glify)
-  observeEvent(input$clear, {
-    leafletProxy("map") %>% 
-      clearGlLayers()
-  })
-  
+      removeGlPoints(layerId = "2")
+  })  
 }
 
 shinyApp(ui, server)
