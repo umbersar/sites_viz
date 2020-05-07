@@ -206,6 +206,19 @@ ui <- dashboardPage(
 
 
 server <- function(input, output, session) {
+  layerID <- reactiveValues(
+    ids = list()
+  )
+  
+  data_of_click <- reactiveValues(
+    clickedMarker = list(),
+    layerCount = 0
+  )
+  mapData <- reactiveValues(
+    data=NULL,
+    pts=NULL,
+    coordinates=NULL
+  )
   # ------------------------------------------------------------------------- #
   # reactive function for loading lab results for the 
   # selected morphology attribute
@@ -226,8 +239,8 @@ server <- function(input, output, session) {
   })
   
   loadMapData <- reactive({
-    data <- na.omit(loadData() %>% select("X", longitutde, latitude))
-    data$layerID <- paste(as.character(data$X), "_sl", sep="")
+    d <- loadData()
+    data <- na.omit(select(d, "X", longitutde, latitude))
     pts <- st_as_sf(data, coords=c(longitutde, latitude))
     return(list(data=data, pts=pts))
   })
@@ -282,42 +295,10 @@ server <- function(input, output, session) {
   # plots
   # ------------------------------------------------------------------------- #
   
-  # output$scatter_morph_attr_lat <- renderPlot({
-  #   plot(
-  #     morphData()$o_latitude_GDA94, 
-  #     morphData()$morphology_attribute_value, 
-  #     xlab = "Latitude", 
-  #     ylab = "Morphology Attribute Value (Elevation)",
-  #     main = "Morphology Attribute Value Against Latitude")
-  # })
-  # 
-  # output$boxplot_morph_attr <- renderPlot({
-  #   boxplot(
-  #     morphData()$morphology_attribute_value, 
-  #     main = "Morphology Attribute Values Box Plot"
-  #   )
-  # })
-  # 
-  # 
-  # output$bar_agency_code <- renderPlot({
-  #   result = plyr::count(morphData(), "agency_code")
-  #    barplot(
-  #     result$freq,
-  #     names.arg = result$agency_code,
-  #     main = "Number of Projects by Agency"
-  #   )
-  # })
   
   # ------------------------------------------------------------------------- #
   # map
   # ------------------------------------------------------------------------- #
-  
-  data_of_click <- reactiveValues(clickedMarker = list())
-  mapData <- reactiveValues(
-    data=NULL,
-    pts=NULL,
-    coordinates=NULL
-  )
   
   observeEvent(loadData(), {
     map_data <- loadMapData()
@@ -329,8 +310,8 @@ server <- function(input, output, session) {
     )
     output$morph_map <- renderLeaflet(
       leaflet() %>%
-        addTiles(options = tileOptions(minZoom=2, maxZoom=12)) %>%
-        setView(lng = 134, lat = -24, zoom = 2) %>%
+        addTiles(options = tileOptions(minZoom=2, maxZoom=15)) %>%
+        setView(lng = 134, lat = -24, zoom = 7) %>%
         addGlPoints(
           data = mapData$pts,
           group = "pts",
@@ -383,11 +364,17 @@ server <- function(input, output, session) {
   # draw new shape
   observeEvent(input$morph_map_draw_new_feature, {
     # only add new layers for bounded locations
+    data_of_click$layerCount <- data_of_click$layerCount + 1
     found_in_bounds <- findLocations(
       shape = input$morph_map_draw_new_feature,
       location_coordinates = mapData$coordinates,
       location_id_colname = "X"
     )
+    
+    cat("length of layerID before adding: ")
+    cat(length(layerID$ids))
+    cat("\n")
+    cat("\n")
     
     for (id in found_in_bounds) {
       if (id %in% data_of_click$clickedMarker) {
@@ -397,26 +384,30 @@ server <- function(input, output, session) {
         # add id
         data_of_click$clickedMarker <- append(
           data_of_click$clickedMarker, id, 0
-        )  
+        )
+        key <- as.character(id)
+        layerID$ids[[key]] <- data_of_click$layerCount
       }
     }
+    
+    cat("length of layerID after adding: ")
+    cat(length(layerID$ids))
+    cat("\n")
+    cat("\n")
     
     # look up data points by ids found
     selected <- subset(mapData$data, X %in% data_of_click$clickedMarker)
     selected_pts <- st_as_sf(selected, coords = c(longitutde, latitude))
     proxy <- leafletProxy("morph_map")
     proxy %>% 
-      addCircles(
+      addGlPoints(
         data = selected_pts,
         radius = 5,
         fillOpacity = 1,
         color = "red",
         weight = 3,
         stroke = T,
-        layerId = as.character(selected$layerID),
-        highlightOptions = highlightOptions(
-          bringToFront = TRUE
-        )
+        layerId = as.character(data_of_click$layerCount),
       )
   })
   
@@ -428,17 +419,33 @@ server <- function(input, output, session) {
       bounded_layer_ids <- findLocations(
         shape = feature,
         location_coordinates = mapData$coordinates,
-        location_id_colname = "layerID"
+        location_id_colname = "X"
       )
       
       # remove second layer representing selected locations
       proxy <- leafletProxy("morph_map")
-      proxy %>% removeShape(layerId = bounded_layer_ids)
       
-      first_layer_ids <- subset(mapData$data, layerID %in% bounded_layer_ids)$X
+      cat("to delete layer id: ")
+      cat(layerID$ids[[ as.character(bounded_layer_ids[1]) ]])
+      cat("\n")
+      
+      # remove deleted points
+      for (id in bounded_layer_ids) {
+        key <- as.character(id)
+        proxy %>% removeGlPoints(
+          layerId = as.character(layerID$ids[[ key ]])
+        )
+        layerID$ids[[key]] <- NULL
+      }
+      
+      output$summary <- renderText(
+        length(layerID$ids)
+      )
+      
+      ids_to_remove <- subset(mapData$data, X %in% bounded_layer_ids)$X
       
       data_of_click$clickedMarker <- data_of_click$clickedMarker[
-        !data_of_click$clickedMarker %in% first_layer_ids
+        !data_of_click$clickedMarker %in% ids_to_remove
       ]
     }
   })
