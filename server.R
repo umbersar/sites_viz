@@ -43,25 +43,18 @@ latitude <- "o_latitude_GDA94"
 ########################### helper functions ##################################
 ###############################################################################
 
-col_has_val <- function(col, val="N/A") {
+col_has_val <- function(col, val=c("N/A", "NA")) {
   for(i in 1:length(col)) {
     if(is.na(col[i])){
       next
     }
-    if(col[i] == val) {
+    if(col[i] %in% val) {
       return(TRUE)
     }
   }
   return(FALSE)
 }
 
-numerical_columns <- function(data) {
-  return (
-    names(select_if(data, function(col) return(
-      Reduce('&', sapply(col, is.numeric))
-    )))
-  )
-}
 
 ###############################################################################
 ############################### server ########################################
@@ -82,6 +75,9 @@ function(input, output, session) {
     pts=NULL,
     coordinates=NULL
   )
+  plotData <- reactiveValues(
+    numerical_columns = NULL
+  )
   
   # ------------------------------------------------------------------------- #
   # reactive function for loading lab results for the 
@@ -90,10 +86,22 @@ function(input, output, session) {
   
   # load whole morphology dataset from .csv file
   loadData <- reactive({
-    data <- read.csv(stringr::str_interp("data/${input$morph_attr}.csv"))
+    data <- read.csv(stringr::str_interp("data/${input$dataset}.csv"))
     filtered <- data %>%
-      select_if(function(col) return(!col_has_val(col))) %>%
-      select(-"morphology_attribute")
+      select_if(function(col) return(!col_has_val(col)))
+    if ("morphology_attribute" %in% names(filtered)) {
+      filtered %>% select(-"morphology_attribute")
+    }
+    # data init
+    layerID$ids <- list()
+    data_of_click$clickedMarker <- list()
+    data_of_click$layerCount <- 0
+    mapData$data <- NULL
+    mapData$pts <- NULL
+    mapData$coordinates <- NULL
+    plotData$numerical_columns <- NULL
+    
+    # return
     return(filtered)
   })
   
@@ -394,27 +402,31 @@ function(input, output, session) {
   # ------------------------------------------------------------------------- #
   
   # trigger shiny to update choices for the selectizeInput, "plot_variable_type"
-  loadPlots <- reactive({
+  observeEvent(input$plot_variable_type, {
     req(input$plot_variable_type)
     choices = NULL
     if (input$plot_variable_type == "1") {
+      cat("one variable!")
+      cat("\n")
       choices <- names(plots$var_1)
     }
     else if (input$plot_variable_type == "2") {
+      cat("two variables!")
+      cat("\n")
       choices <- names(plots$var_2)
     }
-    return(choices)
-  })
-  
-  observeEvent(loadPlots(), {
-    req(input$plot_variable_type)
-    choices <- loadPlots()
+    cat("update start")
+    cat("\n")
     updateSelectInput(session, "plot_selection", choices = choices)
+    cat("update end")
+    cat("\n")
   })
   
   # initialise an input tag list
   inputTagList <- tagList()
   # create column inputs
+  
+  
   createColumnInputs <- reactive({
     req(input$plot_variable_type)
     req(input$plot_selection)
@@ -422,7 +434,7 @@ function(input, output, session) {
       inputId <- "plot_one_var"
       inputLabel <- "Select a Column as Input"
       # set inputTagList
-      choices <- morphData()
+      choices <- names(morphData())
       type <- plots$var_1[[input$plot_selection]]$type
       if (!is.null(type)) {
         if (type == "numerics") {
@@ -469,21 +481,24 @@ function(input, output, session) {
     output$allInputs <- renderUI({createColumnInputs()})
   })
   
-  observeEvent(input$doPlot, {
-    req(input$plot_selection)
-    plot_selection <- input$plot_selection
-    if (input$plot_variable_type == "1") {
-      output$plot_output <- renderPlot(
+  generatePlot <- eventReactive(input$doPlot, {
+    cat(input$doPlot)
+    # req(input$plot_selection)
+    if (input$doPlot >= 1) {
+      plot_selection <- input$plot_selection
+      if (input$plot_variable_type == "1") {
         ggplot(morphData(), aes_string(input$plot_one_var)) +
           plots$var_1[[plot_selection]]$plot
-      )
-    }
-    else if (input$plot_variable_type == "2") {
-      output$plot_output <- renderPlot(
+      }
+      else if (input$plot_variable_type == "2") {
         ggplot(morphData(), aes_string(input$plot_two_var_x, input$plot_two_var_y)) +
           plots$var_2[[plot_selection]]$plot
-      )
+      }
     }
+  })
+  
+  output$plot_output <- renderPlot({
+    generatePlot()
   })
   
   # render table helper
@@ -500,5 +515,15 @@ function(input, output, session) {
         )
       )
     )
+  }
+  
+  # helper functions
+  numerical_columns <- function(data) {
+    if (is.null(plotData$numerical_columns)) {
+      plotData$numerical_columns <- names(select_if(data, function(col) return(
+        Reduce('&', sapply(col, is.numeric))
+      )))
+    }
+    return(plotData$numerical_columns)
   }
 }

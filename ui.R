@@ -8,7 +8,7 @@ morph_meta <- read.csv("data/morph_metadata.csv")
 
 # using morphology attribute name to load the corresponding .csv file
 # for the time being, we are only testing with a small subset
-morph_attrs <- c(
+datasets <- c(
   "cf_shape", 
   "crack_width", 
   "h_texture", 
@@ -16,10 +16,11 @@ morph_attrs <- c(
   "o_elevation", 
   "s_patt_type", 
   "samp_upper_depth", 
-  "scf_strength"
+  "scf_strength",
+  "lab_results"
 )
 # uncomment the following to work with the full set of attribute names
-# morph_attrs <- morph_meta %>% select("Morphology_Class_Attribute")
+# datasets <- morph_meta %>% select("Morphology_Class_Attribute")
 ###############################################################################
 ################################# ui ##########################################
 ###############################################################################
@@ -76,7 +77,7 @@ dashboardPage(
         tabName = "about",
         fluidRow(
           box(
-            width = 12,
+            width = 6,
             title = "About",
             about_one,
             about_two,
@@ -84,7 +85,7 @@ dashboardPage(
             about_three_list
           ),
           box(
-            width = 12,
+            width = 6,
             title = "How To",
             how_to_one,
             how_to_two
@@ -102,25 +103,25 @@ dashboardPage(
         fixedRow(
           box (
             width = 5,
-            title = "Select a Morphology Class Attribute",
+            title = "Dataset Selection and Filtering",
             
             # morphology selection
             selectizeInput(
-              inputId = "morph_attr", 
-              label = "Select a Morphology Class Attribute", 
-              choices = morph_attrs, 
+              inputId = "dataset", 
+              label = "Select a Dataset", 
+              choices = datasets, 
               selected = "o_elevation",
               multiple = FALSE
             ),
             
             # decide if we need to apply filtering or not
             checkboxInput("filter_checkbox", 
-                          "Check the Box to Filter Data", 
+                          "Filter Data?", 
                           value = FALSE, 
                           width = "100%"),
             selectizeInput(
               inputId = "filter_attr", 
-              label = "Filter dataset based on values of a column", 
+              label = "Filter Dataset By Column", 
               choices = NULL, 
               selected = "",
               multiple = FALSE
@@ -154,14 +155,12 @@ dashboardPage(
           box(
             title = "section for map",
             leafletOutput("morph_map", width = "100%", height = "540px"),
-            height = "600px",
             width = 5,
             solidHeader = TRUE
           ),
           box(
             title = "Data Display -- Filtered Dataset",
             DT::dataTableOutput('morph_data'),
-            height = "600px",
             id = "datatable",
             width = 7,
             solidHeader = TRUE
