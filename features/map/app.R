@@ -13,38 +13,56 @@ library(leafgl)
 library(sf)
 library(sp)
 
-
-longitutde <- "o_longitude_GDA94"
-latitude <- "o_latitude_GDA94"
-
-# data course
-myData <- read.csv('../../data/o_elevation.csv')
-myData <- na.omit(select(myData, "X", longitutde, latitude))
-myData[, "layerID"] <- NA
-pts <- st_as_sf(myData, coords = c(longitutde, latitude))
-
-coordinates <- SpatialPointsDataFrame(myData[, c(longitutde, latitude)], myData)
+col_has_val <- function(col, val="N/A") {
+  for(i in 1:length(col)) {
+    if(is.na(col[i])){
+      next
+    }
+    if(col[i] == val) {
+      return(TRUE)
+    }
+  }
+  return(FALSE)
+}
 
 shinyApp(
   ui <- fluidPage(
-    verbatimTextOutput("simple"),
-    leafletOutput("mymap", height = "800"),
-    verbatimTextOutput("debug"),
-    verbatimTextOutput("debug2")
+    splitLayout(
+      cellWidths = c("40%", "60%"),
+      leafletOutput("mymap", height = "500"),
+      DT::dataTableOutput('mydt')
+    ),
+    checkboxInput("checked", "Show Data Points in Bounds in DT?"),
+    verbatimTextOutput("bounds_explain"),
+    verbatimTextOutput("bounds")
   ),
   
   server <- function(input, output) {
+    longitutde <- "o_longitude_GDA94"
+    latitude <- "o_latitude_GDA94"
+    
+    # data course
+    myData <- read.csv('../../data/o_elevation.csv')
+    myData <- myData %>%
+      select_if(function(col) return(!col_has_val(col))) %>%
+      select(-"morphology_attribute")
+    mapData <- na.omit(select(myData, "X", longitutde, latitude))
+    pts <- st_as_sf(mapData, coords = c(longitutde, latitude))
+    
+    coordinates <- SpatialPointsDataFrame(mapData[, c(longitutde, latitude)], mapData)
+    
     ##################################################################################
-    # section one
-    # list to store the selections for tracking
-    data_of_click <- reactiveValues(
-      clickedMarker = list(),
-      layerCount = 0
+    zoom_data <- reactiveValues(
+      in_frame = list(),
+      bounds = list(
+        north = 90,
+        east = 180,
+        south = -90,
+        west = 0
+      ),
+      first_time = TRUE
     )
-
-    ##################################################################################
-    # section two
-    # base map, with area selection, powered by leaflet.extras
+    
     output$mymap <- renderLeaflet({
       leaflet() %>%
         addTiles() %>%
@@ -62,7 +80,7 @@ shinyApp(
             bringToFront = TRUE
           )
         ) %>%
-        setView(lng = 133, lat = -24, zoom = 7) %>%
+        setView(lng = 133, lat = -24, zoom = 3) %>%
         addDrawToolbar(
           targetGroup = 'Selected',
           polylineOptions = FALSE,
@@ -96,79 +114,22 @@ shinyApp(
         ) 
     })
     
-    ##################################################################################  
-    # section three
-    # events
-    observeEvent(input$mymap_draw_new_feature, {
-      # only add new layers for bounded locations
-      data_of_click$layerCount <- data_of_click$layerCount + 1
-      
-      found_in_bounds <- findLocations(
-        shape = input$mymap_draw_new_feature,
-        location_coordinates = coordinates,
-        location_id_colname = "X"
+    output$mydt <- DT::renderDataTable(
+      myData %>% select(-"X"),
+      options = list(
+        pageLength = 10, 
+        scrollX = TRUE,
+        ordering = FALSE,
+        autoWidth = TRUE,
+        info = FALSE
       )
-      for (id in found_in_bounds) {
-        if (id %in% data_of_click$clickedMarker) {
-          # do not add id
-        } 
-        else {
-          # add id
-          data_of_click$clickedMarker <- append(data_of_click$clickedMarker, id, 0)
-          # add a new layerID
-          myData$layerID[id] <- data_of_click$layerCount
-        }
-      }
-      
-      # add a new layer for the selected region
-      
-      # look up data points by ids found
-      selected <- subset(myData, X %in% data_of_click$clickedMarker)
-      selected_pts <- st_as_sf(selected, coords = c(longitutde, latitude))
-      layerID <- as.character(data_of_click$layerCount)
-      
-      output$debug <- renderText(
-        layerID
-      )
-      
-      leafletProxy("mymap") %>% 
-      addGlPoints(
-        data = selected_pts,
-        radius = 5,
-        fillColor = "red",
-        fillOpacity = "1",
-        weight = 3,
-        stroke = T,
-        # layerId = as.character(data_of_click$layerCount)
-        layerId = layerID
-      )
-    })
+    )
     
-    ##################################################################################
-    # section four
-    observeEvent(input$mymap_draw_deleted_features, {
-      # loop through list of one or more deleted features/polygons
-      for (feature in input$mymap_draw_deleted_features$features) {
-        # get ids for locations within the bounding shape
-        bounded_layer_ids <- findLocations(
-          shape = feature,
-          location_coordinates = coordinates,
-          location_id_colname = "X"
-        )
-        
-        # remove second layer representing selected locations
-        proxy <- leafletProxy("mymap")
-        # proxy %>% removeShape(layerId = bounded_layer_ids)
-        proxy %>% removeGlPoints(layerId = data_of_click$layerCount)
-        
-        data_of_click$clickedMarker <- data_of_click$clickedMarker[
-          !data_of_click$clickedMarker %in% bounded_layer_ids
-        ]
-      }
-    })
-    
-    observeEvent(input$mymap_zoom, {
-      output$simple <- renderText(
+    observeEvent(input$mymap_bounds, {
+      output$bounds_explain <- renderText(
+        "(north, east, south, west)"
+      )
+      output$bounds <- renderText(
         paste0("(", paste(
           input$mymap_bounds$north, 
           input$mymap_bounds$east, 
@@ -177,49 +138,99 @@ shinyApp(
           sep = ", "), ")"
         )
       )
+      if (input$checked) {
+        update_dt_bounds(
+          input$mymap_bounds
+        )
+      }
     })
-    ##################################################################################
-    # section five
-    # findLocations function
-    findLocations <- function(shape, location_coordinates, location_id_colname) {
-      # derive polygon coordinates and feature_type from shape input
-      polygon_coordinates <- shape$geometry$coordinates
-      feature_type <- shape$properties$feature_type
+
+    observeEvent(input$checked, {
+      if (input$checked) {
+        showNotification("Updating the table, please wait...")
+        update_dt_bounds(
+          input$mymap_bounds
+        )
+      }
+    })
+    
+    update_dt_bounds <- function (bounds) {
+      # on start up loop through all
+      if (zoom_data$first_time) {
+        find_in_frame(coordinates, bounds)
+        zoom_data$first_time <- FALSE
+      }
+      else {
+        cat("subset start")
+        cat("\n")
+        in_frame <- subset(coordinates, X %in% zoom_data$in_frame)
+        cat("subset end")
+        cat("\n")
+        # zooming in
+        cat("find in frame start")
+        cat("\n")
+        if (
+          zoom_data$bounds$west <= bounds$west &
+          bounds$east <= zoom_data$bounds$east &
+          zoom_data$bounds$south <= bounds$south &
+          bounds$north <= zoom_data$bounds$north
+        ) {
+          cat("zooming in ...")
+          find_in_frame(in_frame, bounds)
+        }
+        else {
+          find_in_frame(coordinates, bounds)
+        }
+        cat("find in frame end")
+        cat("\n")
+      }
+      # update data table
+      cat("myData length: ")
+      cat(length(myData))
+      cat("\n")
+      output$mydt <- DT::renderDataTable(
+        subset(myData, X %in% zoom_data$in_frame) %>%
+          select(-"X"),
+        options = list(
+          pageLength = 10, 
+          scrollX = TRUE,
+          ordering = FALSE,
+          autoWidth = TRUE,
+          info = FALSE
+        )
+      )
+      cat("length of points in frame: ")
+      cat(length(zoom_data$in_frame))
+      cat("\n")
       
-      if (feature_type %in% c("rectangle", "polygon")) {
-        # transform into a spatial polygon
-        drawn_polygon <- Polygon(
-          do.call(rbind, lapply(polygon_coordinates[[1]], function(x){c(x[[1]][1], x[[2]][1])}))
+      # update zoom_data$bounds
+      zoom_data$bounds <- input$mymap_bounds
+    }
+    
+    find_in_frame <- function (data, bounds) {
+      zoom_data$in_frame <- list()
+      count <- 0
+      len <- length(data)
+      cat("length of data is: ")
+      cat(len)
+      cat("\n")
+      while(count < len) {
+        count <- count + 1
+        if (
+          bounds$west <= data[count,]$o_longitude_GDA94 &
+          data[count,]$o_longitude_GDA94 <= bounds$east &
+          bounds$south <= data[count,]$o_latitude_GDA94 &
+          data[count,]$o_latitude_GDA94 <= bounds$north
         )
-        
-        # use 'over' from the sp package to identify selected locations
-        selected_locs <- sp::over(
-          location_coordinates,
-          sp::SpatialPolygons(list(sp::Polygons(list(drawn_polygon), "drawn_polygon")))
-        )
-        
-        # get ids
-        x = (location_coordinates[which(!is.na(selected_locs)), location_id_colname])
-        selected_loc_id = x[[location_id_colname]]
-        
-        return (selected_loc_id)
-      } 
-      else if (feature_type == "circle") {
-        center_coords <- matrix(c(polygon_coordinates[[1]], polygon_coordinates[[2]]), ncol = 2)
-        # get distances to center of drawn circle for all locations in location_coordinates
-        # distance is in kilometers
-        dist_to_center <- spDistsN1(location_coordinates, center_coords, longlat = TRUE)
-        
-        # get location ids
-        # radius in meters
-        x <- location_coordinates[dist_to_center < shape$properties$radius/1000, location_id_colname]
-        selected_loc_id = x[[location_id_colname]]
-        
-        return(selected_loc_id)
+        {
+          zoom_data$in_frame <- append(
+            zoom_data$in_frame, data[count, ]$X, 0
+          )
+        }
       }
     }
   },
   
-  options = list(height = 1000)
+  options = list(height = 500)
 )
 

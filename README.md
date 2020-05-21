@@ -42,8 +42,17 @@ app.R
 /data
 /features
 ```
-For the time being, all the `.csv` files are stored within the `/data` folder.
+For the time being, all the datasets are provided in a `.csv` format and are 
+stored within the `/data` folder.
+
 
 In the `/features` folder, you can find features that are being developed and tested, 
 such as high-performance maps and advanced data tables.
 
+
+To run the app, open `app.R` in RStudio. After the file has been opened, 
+you will find a special `Run App` button on the top right corner of the script. 
+Clicking on `Run App` will start up the application. 
+
+
+Alternatively, one could use `shift + command + return` on Mac or `shift + control + enter` on Windows.
