@@ -109,7 +109,7 @@ function(input, output, session) {
     # data init
     rv$map_layer_ids <- list()
     rv$map_selected <- list()
-    data_of_click$layerCount <- 0
+    rv$map_layer_count <- 0
     mapData$data <- NULL
     mapData$pts <- NULL
     mapData$coordinates <- NULL
@@ -301,7 +301,7 @@ function(input, output, session) {
   # draw new shape
   observeEvent(input$geo_map_draw_new_feature, {
     # only add new layers for bounded locations
-    data_of_click$layerCount <- data_of_click$layerCount + 1
+    rv$map_layer_count <- rv$map_layer_count + 1
     found_in_bounds <- findLocations(
       shape = input$geo_map_draw_new_feature,
       location_coordinates = mapData$coordinates,
@@ -318,7 +318,7 @@ function(input, output, session) {
           rv$map_selected, id, 0
         )
         key <- as.character(id)
-        rv$map_layer_ids[[key]] <- data_of_click$layerCount
+        rv$map_layer_ids[[key]] <- rv$map_layer_count
       }
     }
     
@@ -345,7 +345,7 @@ function(input, output, session) {
         color = "red",
         weight = 3,
         stroke = T,
-        layerId = as.character(data_of_click$layerCount),
+        layerId = as.character(rv$map_layer_count),
       )
   })
   
