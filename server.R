@@ -64,14 +64,6 @@ function(input, output, session) {
   # ------------------------------------------------------------------------- #
   # reactive values
   # ------------------------------------------------------------------------- #
-  mapData <- reactiveValues(
-    data=NULL,
-    pts=NULL,
-    coordinates=NULL
-  )
-  plotData <- reactiveValues(
-    numerical_columns = NULL
-  )
   datatableData <- reactiveValues(
     data = NULL,
     dataX = NULL
@@ -109,7 +101,7 @@ function(input, output, session) {
     rv$map_data <- NULL
     rv$map_pts <- NULL
     rv$map_coords <- NULL
-    plotData$numerical_columns <- NULL
+    rv$plot_numerical_columns <- NULL
     datatableData$data <- data %>% select(-"X")
     datatableData$dataX <- data
     
@@ -559,11 +551,11 @@ function(input, output, session) {
   
   # return numerical columns in the given "data" data table  
   numerical_columns <- function(data) {
-    if (is.null(plotData$numerical_columns)) {
-      plotData$numerical_columns <- names(select_if(data, function(col) return(
+    if (is.null(rv$plot_numerical_columns)) {
+      rv$plot_numerical_columns <- names(select_if(data, function(col) return(
         Reduce('&', sapply(col, is.numeric))
       )))
     }
-    return(plotData$numerical_columns)
+    return(rv$plot_numerical_columns)
   }
 }
