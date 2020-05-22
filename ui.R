@@ -47,7 +47,7 @@ about_three_list <- tags$ol(
   tags$li("Choose between different plots and generate them dynamically.")
 )
 
-
+how_to_title <- h2("How To")
 how_to_one <- p("To get started, simply click on the \"Explore\" tab on the left.")
 how_to_two <- p("Please note that after collapsing or expanding the tab menu, 
                 the data points on the map may appear to have disappeared. 
@@ -76,19 +76,25 @@ dashboardPage(
       tabItem(
         tabName = "about",
         fluidRow(
-          box(
+          column(
             width = 6,
-            title = "About",
-            about_one,
-            about_two,
-            about_three,
-            about_three_list
+            box(
+              width = 12,
+              title = "About",
+              about_one,
+              about_two,
+              about_three,
+              about_three_list
+            )
           ),
-          box(
+          column(
             width = 6,
-            title = "How To",
-            how_to_one,
-            how_to_two
+            box(
+              width = 12,
+              title = "How To",
+              how_to_one,
+              how_to_two
+            )
           )
         )),
       
