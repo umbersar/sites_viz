@@ -64,10 +64,6 @@ function(input, output, session) {
   # ------------------------------------------------------------------------- #
   # reactive values
   # ------------------------------------------------------------------------- #
-  data_of_click <- reactiveValues(
-    clickedMarker = list(),
-    layerCount = 0
-  )
   mapData <- reactiveValues(
     data=NULL,
     pts=NULL,
