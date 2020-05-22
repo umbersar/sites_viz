@@ -64,9 +64,6 @@ function(input, output, session) {
   # ------------------------------------------------------------------------- #
   # reactive values
   # ------------------------------------------------------------------------- #
-  layerID <- reactiveValues(
-    ids = list()
-  )
   data_of_click <- reactiveValues(
     clickedMarker = list(),
     layerCount = 0
@@ -110,7 +107,7 @@ function(input, output, session) {
     #   filtered %>% select(-"morphology_attribute")
     # }
     # data init
-    layerID$ids <- list()
+    rv$map_layer_ids <- list()
     data_of_click$clickedMarker <- list()
     data_of_click$layerCount <- 0
     mapData$data <- NULL
@@ -321,7 +318,7 @@ function(input, output, session) {
           data_of_click$clickedMarker, id, 0
         )
         key <- as.character(id)
-        layerID$ids[[key]] <- data_of_click$layerCount
+        rv$map_layer_ids[[key]] <- data_of_click$layerCount
       }
     }
     
@@ -370,9 +367,9 @@ function(input, output, session) {
       for (id in bounded_layer_ids) {
         key <- as.character(id)
         proxy %>% removeGlPoints(
-          layerId = as.character(layerID$ids[[ key ]])
+          layerId = as.character(rv$map_layer_ids[[ key ]])
         )
-        layerID$ids[[key]] <- NULL
+        rv$map_layer_ids[[key]] <- NULL
       }
       
       ids_to_remove <- subset(mapData$data, X %in% bounded_layer_ids)$X
