@@ -107,6 +107,7 @@ function(input, output, session) {
     plotData$numerical_columns <- NULL
     datatableData$data <- data %>% select(-"X")
     datatableData$dataX <- data
+    
     # update select input for drop_cols
     updateSelectizeInput(
       session, "drop_cols", 
@@ -184,8 +185,8 @@ function(input, output, session) {
   # after the morphology dataset has been loaded, we load
   observeEvent(loadData(), {
     choices <- unique(names(datatableData$data))
-    updateSelectInput(session, "filter_attr", choices = choices)
-    updateSelectInput(session, "summary_attr", choices = choices)
+    updateSelectizeInput(session, "filter_attr", choices = choices)
+    updateSelectizeInput(session, "summary_attr", choices = choices)
   })
   
   # load the unqiue values present in a morph attribute column
@@ -196,6 +197,22 @@ function(input, output, session) {
     choices <- unique(select(datatableData$dataX, input$filter_attr))
     cat(length(choices))
     updateSelectizeInput(session, "filter_val", choices = choices)
+  })
+  
+  observeEvent(input$filter_val, {
+    if (input$filter_checkbox) {
+      datatableData$dataX <- loadData() %>% 
+        dplyr::filter((!!sym(input$filter_attr)) == input$filter_val)
+      cat(names(datatableData$dataX))
+      datatableData$data <- datatableData$dataX %>% 
+        select(-input$drop_cols) %>%
+        select(-"X")
+    } else {
+      datatableData$dataX <- loadData()
+      datatableData$data <- datatableData$dataX %>% 
+        select(-input$drop_cols) %>%
+        select(-"X")
+    }
   })
   
   observeEvent(input$summary_attr, {
@@ -456,7 +473,7 @@ function(input, output, session) {
     else if (input$plot_variable_type == "2") {
       choices <- names(plots$var_2)
     }
-    updateSelectInput(session, "plot_selection", choices = choices)
+    updateSelectizeInput(session, "plot_selection", choices = choices)
   })
   
   # initialise an input tag list
@@ -464,7 +481,8 @@ function(input, output, session) {
   # create column inputs
   
   
-  createColumnInputs <- eventReactive(loadData(), {
+  createColumnInputs <- reactive({
+    req(loadData())
     req(input$plot_variable_type)
     req(input$plot_selection)
     if (input$plot_variable_type == "1") {
