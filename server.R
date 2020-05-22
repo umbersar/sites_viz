@@ -84,6 +84,18 @@ function(input, output, session) {
     dataX = NULL
   )
   
+  rv <- reactiveValues(
+    map_layer_ids = list(),
+    map_selected = list(),
+    map_layer_count = 0,
+    map_data = NULL,
+    map_pts = NULL,
+    map_coordinates = NULL,
+    plot_numerical_columns = NULL,
+    dt_dataX = NULL,
+    dt_data = NULL
+  )
+  
   # ------------------------------------------------------------------------- #
   # reactive function for loading lab results for the 
   # selected morphology attribute
@@ -127,7 +139,7 @@ function(input, output, session) {
     })
     # bind download button with downloadHandler
     output$download = downloadHandler('data.csv', content = function(file) {
-      s = input$morph_data_rows_all
+      s = input$datatable_rows_all
       write.csv(datatableData$data[s, , drop = FALSE], file)
     })
     
@@ -149,24 +161,6 @@ function(input, output, session) {
         select(-input$drop_cols) %>% 
         select(-"X")
     }
-    # if (length(input$drop_cols) == 0) {
-    #   datatableData$dataX <- loadData()
-    #   datatableData$data <- datatableData$dataX %>% select(-"X")
-    # }
-    # else {
-    #   # if we are displaying data points in selected areas
-    #   # then drop based on current set of data points
-    #   if (length(data_of_click$clickedMarker) > 0 ) {
-    #     datatableData$data <- datatableData$dataX %>% 
-    #       select(-input$drop_cols) %>%
-    #       select(-"X")
-    #   }
-    #   else { # otherwise drop based on the original dataset
-    #     datatableData$data <- datatableData$dataX %>% 
-    #       select(-input$drop_cols) %>% 
-    #       select(-"X")
-    #   }
-    # }
   })
   
   # # filter out the "X" column to give us the morphology data
@@ -195,7 +189,6 @@ function(input, output, session) {
   observeEvent(input$filter_attr, {
     req(input$filter_attr)
     choices <- unique(select(datatableData$dataX, input$filter_attr))
-    cat(length(choices))
     updateSelectizeInput(session, "filter_val", choices = choices)
   })
   
@@ -203,7 +196,6 @@ function(input, output, session) {
     if (input$filter_checkbox) {
       datatableData$dataX <- loadData() %>% 
         dplyr::filter((!!sym(input$filter_attr)) == input$filter_val)
-      cat(names(datatableData$dataX))
       datatableData$data <- datatableData$dataX %>% 
         select(-input$drop_cols) %>%
         select(-"X")
@@ -220,7 +212,7 @@ function(input, output, session) {
       paste(
         names(summary(datatableData$data[[input$summary_attr]])),
         summary(datatableData$data[[input$summary_attr]]),
-        sep = ": ",
+        sep = ":  ",
         collapse = "\n"
       )
     )
@@ -228,11 +220,10 @@ function(input, output, session) {
   
   # filter data
   observeEvent(input$filter_checkbox, {
-    output$morph_data <- DT::renderDataTable({
+    output$datatable <- DT::renderDataTable({
       if (input$filter_checkbox) {
         datatableData$dataX <- loadData() %>% 
           dplyr::filter((!!sym(input$filter_attr)) == input$filter_val)
-        cat(names(datatableData$dataX))
         datatableData$data <- datatableData$dataX %>% 
           select(-input$drop_cols) %>%
           select(-"X")
@@ -257,7 +248,7 @@ function(input, output, session) {
       mapData$data[, c(longitude, latitude)], 
       mapData$data
     )
-    output$morph_map <- renderLeaflet(
+    output$geo_map <- renderLeaflet(
       leaflet() %>%
         addTiles(options = tileOptions(minZoom=2, maxZoom=15)) %>%
         setView(lng = 134, lat = -24, zoom = 2) %>%
@@ -311,11 +302,11 @@ function(input, output, session) {
   })
   
   # draw new shape
-  observeEvent(input$morph_map_draw_new_feature, {
+  observeEvent(input$geo_map_draw_new_feature, {
     # only add new layers for bounded locations
     data_of_click$layerCount <- data_of_click$layerCount + 1
     found_in_bounds <- findLocations(
-      shape = input$morph_map_draw_new_feature,
+      shape = input$geo_map_draw_new_feature,
       location_coordinates = mapData$coordinates,
       location_id_colname = "X"
     )
@@ -348,7 +339,7 @@ function(input, output, session) {
     # look up data points by ids found
     selected <- subset(mapData$data, X %in% found_in_bounds)
     selected_pts <- st_as_sf(selected, coords = c(longitude, latitude))
-    proxy <- leafletProxy("morph_map")
+    proxy <- leafletProxy("geo_map")
     proxy %>% 
       addGlPoints(
         data = selected_pts,
@@ -362,9 +353,9 @@ function(input, output, session) {
   })
   
   # delete shape(s)
-  observeEvent(input$morph_map_draw_deleted_features, {
+  observeEvent(input$geo_map_draw_deleted_features, {
     # loop through list of one or more deleted features/polygons
-    for (feature in input$morph_map_draw_deleted_features$features) {
+    for (feature in input$geo_map_draw_deleted_features$features) {
       # get ids for locations within the bounding shape
       bounded_layer_ids <- findLocations(
         shape = feature,
@@ -373,7 +364,7 @@ function(input, output, session) {
       )
       
       # remove second layer representing selected locations
-      proxy <- leafletProxy("morph_map")
+      proxy <- leafletProxy("geo_map")
       
       # remove deleted points
       for (id in bounded_layer_ids) {
@@ -559,11 +550,12 @@ function(input, output, session) {
   # ------------------------------------------------------------------------- #
   
   observeEvent(datatableData$data, {
-    output$morph_data <- DT::renderDataTable(
+    output$datatable <- DT::renderDataTable(
       DT::datatable(
         datatableData$data,
         options = list(
           pageLength = 10, 
+          lengthMenu = list(c(5,10,15), c("5", "10", "15")),
           scrollX = TRUE,
           ordering = FALSE,
           autoWidth = TRUE,
