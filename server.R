@@ -83,7 +83,7 @@ function(input, output, session) {
     map_layer_count = 0,
     map_data = NULL,
     map_pts = NULL,
-    map_coordinates = NULL,
+    map_coords = NULL,
     plot_numerical_columns = NULL,
     dt_dataX = NULL,
     dt_data = NULL
@@ -106,9 +106,9 @@ function(input, output, session) {
     rv$map_layer_ids <- list()
     rv$map_selected <- list()
     rv$map_layer_count <- 0
-    mapData$data <- NULL
-    mapData$pts <- NULL
-    mapData$coordinates <- NULL
+    rv$map_data <- NULL
+    rv$map_pts <- NULL
+    rv$map_coords <- NULL
     plotData$numerical_columns <- NULL
     datatableData$data <- data %>% select(-"X")
     datatableData$dataX <- data
@@ -155,11 +155,6 @@ function(input, output, session) {
         select(-"X")
     }
   })
-  
-  # # filter out the "X" column to give us the morphology data
-  # morphData <- reactive({
-  #   return(loadData() %>% select(-"X"))
-  # })
   
   # select only the "X", long, and lat columns as map data
   loadMapData <- eventReactive(loadData(), {
@@ -235,18 +230,18 @@ function(input, output, session) {
   
   observeEvent(loadData(), {
     map_data <- loadMapData()
-    mapData$data <- map_data$data
-    mapData$pts <- map_data$pts
-    mapData$coordinates <- SpatialPointsDataFrame(
-      mapData$data[, c(longitude, latitude)], 
-      mapData$data
+    rv$map_data <- map_data$data
+    rv$map_pts <- map_data$pts
+    rv$map_coords <- SpatialPointsDataFrame(
+      rv$map_data[, c(longitude, latitude)], 
+      rv$map_data
     )
     output$geo_map <- renderLeaflet(
       leaflet() %>%
         addTiles(options = tileOptions(minZoom=2, maxZoom=15)) %>%
         setView(lng = 134, lat = -24, zoom = 2) %>%
         addGlPoints(
-          data = mapData$pts,
+          data = rv$map_pts,
           group = "pts",
           radius = 5,
           fillColor = "black",
@@ -300,7 +295,7 @@ function(input, output, session) {
     rv$map_layer_count <- rv$map_layer_count + 1
     found_in_bounds <- findLocations(
       shape = input$geo_map_draw_new_feature,
-      location_coordinates = mapData$coordinates,
+      location_coordinates = rv$map_coords,
       location_id_colname = "X"
     )
     
@@ -330,7 +325,7 @@ function(input, output, session) {
     }
     
     # look up data points by ids found
-    selected <- subset(mapData$data, X %in% found_in_bounds)
+    selected <- subset(rv$map_data, X %in% found_in_bounds)
     selected_pts <- st_as_sf(selected, coords = c(longitude, latitude))
     proxy <- leafletProxy("geo_map")
     proxy %>% 
@@ -352,7 +347,7 @@ function(input, output, session) {
       # get ids for locations within the bounding shape
       bounded_layer_ids <- findLocations(
         shape = feature,
-        location_coordinates = mapData$coordinates,
+        location_coordinates = rv$map_coords,
         location_id_colname = "X"
       )
       
@@ -368,7 +363,7 @@ function(input, output, session) {
         rv$map_layer_ids[[key]] <- NULL
       }
       
-      ids_to_remove <- subset(mapData$data, X %in% bounded_layer_ids)$X
+      ids_to_remove <- subset(rv$map_data, X %in% bounded_layer_ids)$X
       
       rv$map_selected <- rv$map_selected[
         !rv$map_selected %in% ids_to_remove
