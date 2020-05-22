@@ -108,7 +108,7 @@ function(input, output, session) {
     # }
     # data init
     rv$map_layer_ids <- list()
-    data_of_click$clickedMarker <- list()
+    rv$map_selected <- list()
     data_of_click$layerCount <- 0
     mapData$data <- NULL
     mapData$pts <- NULL
@@ -148,7 +148,7 @@ function(input, output, session) {
     req(loadData())
     # if we are displaying data points in selected areas
     # then drop based on current set of data points
-    if (length(data_of_click$clickedMarker) > 0 ) {
+    if (length(rv$map_selected) > 0 ) {
       datatableData$data <- datatableData$dataX %>% 
         select(-input$drop_cols) %>%
         select(-"X")
@@ -309,13 +309,13 @@ function(input, output, session) {
     )
     
     for (id in found_in_bounds) {
-      if (id %in% data_of_click$clickedMarker) {
+      if (id %in% rv$map_selected) {
         # do not add id
       } 
       else {
         # add id
-        data_of_click$clickedMarker <- append(
-          data_of_click$clickedMarker, id, 0
+        rv$map_selected <- append(
+          rv$map_selected, id, 0
         )
         key <- as.character(id)
         rv$map_layer_ids[[key]] <- data_of_click$layerCount
@@ -323,10 +323,10 @@ function(input, output, session) {
     }
     
     # display selected data points in the data table
-    if (length(data_of_click$clickedMarker) > 0) {
+    if (length(rv$map_selected) > 0) {
       # filter dataX
       datatableData$dataX <- datatableData$dataX %>% 
-        subset(X %in% data_of_click$clickedMarker)
+        subset(X %in% rv$map_selected)
       # display data by dropping X
       datatableData$data <- datatableData$dataX %>%
         select(-input$drop_cols) %>%
@@ -374,13 +374,13 @@ function(input, output, session) {
       
       ids_to_remove <- subset(mapData$data, X %in% bounded_layer_ids)$X
       
-      data_of_click$clickedMarker <- data_of_click$clickedMarker[
-        !data_of_click$clickedMarker %in% ids_to_remove
+      rv$map_selected <- rv$map_selected[
+        !rv$map_selected %in% ids_to_remove
       ]
       
       # populate data table with original dataset 
       # in case there are no data points selected
-      if (length(data_of_click$clickedMarker) == 0) {
+      if (length(rv$map_selected) == 0) {
         datatableData$dataX <- loadData()
         datatableData$data <- datatableData$dataX %>% 
           select(-input$drop_cols) %>%
