@@ -64,11 +64,6 @@ function(input, output, session) {
   # ------------------------------------------------------------------------- #
   # reactive values
   # ------------------------------------------------------------------------- #
-  datatableData <- reactiveValues(
-    data = NULL,
-    dataX = NULL
-  )
-  
   rv <- reactiveValues(
     map_layer_ids = list(),
     map_selected = list(),
@@ -77,7 +72,7 @@ function(input, output, session) {
     map_pts = NULL,
     map_coords = NULL,
     plot_numerical_columns = NULL,
-    dt_dataX = NULL,
+    dt_data_x = NULL,
     dt_data = NULL
   )
   
@@ -102,13 +97,13 @@ function(input, output, session) {
     rv$map_pts <- NULL
     rv$map_coords <- NULL
     rv$plot_numerical_columns <- NULL
-    datatableData$data <- data %>% select(-"X")
-    datatableData$dataX <- data
+    rv$dt_data <- data %>% select(-"X")
+    rv$dt_data_x <- data
     
     # update select input for drop_cols
     updateSelectizeInput(
       session, "drop_cols", 
-      choices = names(datatableData$data)
+      choices = names(rv$dt_data)
     )
     
     # create download button for data table
@@ -125,7 +120,7 @@ function(input, output, session) {
     # bind download button with downloadHandler
     output$download = downloadHandler('data.csv', content = function(file) {
       s = input$datatable_rows_all
-      write.csv(datatableData$data[s, , drop = FALSE], file)
+      write.csv(rv$dt_data[s, , drop = FALSE], file)
     })
     
     # return
@@ -137,12 +132,12 @@ function(input, output, session) {
     # if we are displaying data points in selected areas
     # then drop based on current set of data points
     if (length(rv$map_selected) > 0 ) {
-      datatableData$data <- datatableData$dataX %>% 
+      rv$dt_data <- rv$dt_data_x %>% 
         select(-input$drop_cols) %>%
         select(-"X")
     }
     else { # otherwise drop based on the original dataset
-      datatableData$data <- datatableData$dataX %>% 
+      rv$dt_data <- rv$dt_data_x %>% 
         select(-input$drop_cols) %>% 
         select(-"X")
     }
@@ -158,7 +153,7 @@ function(input, output, session) {
   
   # after the morphology dataset has been loaded, we load
   observeEvent(loadData(), {
-    choices <- unique(names(datatableData$data))
+    choices <- unique(names(rv$dt_data))
     updateSelectizeInput(session, "filter_attr", choices = choices)
     updateSelectizeInput(session, "summary_attr", choices = choices)
   })
@@ -168,20 +163,20 @@ function(input, output, session) {
   # trigger shiny to update choices for the selectizeInput, "filter_val"
   observeEvent(input$filter_attr, {
     req(input$filter_attr)
-    choices <- unique(select(datatableData$dataX, input$filter_attr))
+    choices <- unique(select(rv$dt_data_x, input$filter_attr))
     updateSelectizeInput(session, "filter_val", choices = choices)
   })
   
   observeEvent(input$filter_val, {
     if (input$filter_checkbox) {
-      datatableData$dataX <- loadData() %>% 
+      rv$dt_data_x <- loadData() %>% 
         dplyr::filter((!!sym(input$filter_attr)) == input$filter_val)
-      datatableData$data <- datatableData$dataX %>% 
+      rv$dt_data <- rv$dt_data_x %>% 
         select(-input$drop_cols) %>%
         select(-"X")
     } else {
-      datatableData$dataX <- loadData()
-      datatableData$data <- datatableData$dataX %>% 
+      rv$dt_data_x <- loadData()
+      rv$dt_data <- rv$dt_data_x %>% 
         select(-input$drop_cols) %>%
         select(-"X")
     }
@@ -190,8 +185,8 @@ function(input, output, session) {
   observeEvent(input$summary_attr, {
     output$summary <- renderText(
       paste(
-        names(summary(datatableData$data[[input$summary_attr]])),
-        summary(datatableData$data[[input$summary_attr]]),
+        names(summary(rv$dt_data[[input$summary_attr]])),
+        summary(rv$dt_data[[input$summary_attr]]),
         sep = ":  ",
         collapse = "\n"
       )
@@ -202,14 +197,14 @@ function(input, output, session) {
   observeEvent(input$filter_checkbox, {
     output$datatable <- DT::renderDataTable({
       if (input$filter_checkbox) {
-        datatableData$dataX <- loadData() %>% 
+        rv$dt_data_x <- loadData() %>% 
           dplyr::filter((!!sym(input$filter_attr)) == input$filter_val)
-        datatableData$data <- datatableData$dataX %>% 
+        rv$dt_data <- rv$dt_data_x %>% 
           select(-input$drop_cols) %>%
           select(-"X")
       } else {
-        datatableData$dataX <- loadData()
-        datatableData$data <- datatableData$dataX %>% 
+        rv$dt_data_x <- loadData()
+        rv$dt_data <- rv$dt_data_x %>% 
           select(-input$drop_cols) %>%
           select(-"X")
       }
@@ -240,7 +235,7 @@ function(input, output, session) {
           fillOpacity = 1,
           weight = 2,
           stroke = T,
-          layerId = as.character(mapData$X),
+          layerId = "base",
           highlightOptions = highlightOptions(
             fillColor = "red",
             weight = 10,
@@ -308,10 +303,10 @@ function(input, output, session) {
     # display selected data points in the data table
     if (length(rv$map_selected) > 0) {
       # filter dataX
-      datatableData$dataX <- datatableData$dataX %>% 
+      rv$dt_data_x <- rv$dt_data_x %>% 
         subset(X %in% rv$map_selected)
       # display data by dropping X
-      datatableData$data <- datatableData$dataX %>%
+      rv$dt_data <- rv$dt_data_x %>%
         select(-input$drop_cols) %>%
         select(-"X")
     }
@@ -325,7 +320,7 @@ function(input, output, session) {
         data = selected_pts,
         radius = 5,
         fillOpacity = 1,
-        color = "red",
+        fillColor = "red",
         weight = 3,
         stroke = T,
         layerId = as.character(rv$map_layer_count),
@@ -364,8 +359,8 @@ function(input, output, session) {
       # populate data table with original dataset 
       # in case there are no data points selected
       if (length(rv$map_selected) == 0) {
-        datatableData$dataX <- loadData()
-        datatableData$data <- datatableData$dataX %>% 
+        rv$dt_data_x <- loadData()
+        rv$dt_data <- rv$dt_data_x %>% 
           select(-input$drop_cols) %>%
           select(-"X")
       }
@@ -460,11 +455,11 @@ function(input, output, session) {
       inputId <- "plot_one_var"
       inputLabel <- "Select a Column as Input"
       # set inputTagList
-      choices <- names(datatableData$data)
+      choices <- names(rv$dt_data)
       type <- plots$var_1[[input$plot_selection]]$type
       if (!is.null(type)) {
         if (type == "numerics") {
-          choices <- numerical_columns(datatableData$data)
+          choices <- numerical_columns(rv$dt_data)
         }
       }
       inputTagList <<- tagSetChildren(
@@ -479,11 +474,11 @@ function(input, output, session) {
     else if (input$plot_variable_type == "2") {
       newInputs = list();
       choices <- NULL;
-      choices <- names(datatableData$data)
+      choices <- names(rv$dt_data)
       type <- plots$var_2[[input$plot_selection]]$type
       if(!is.null(type)) {
         if (type == "numerics") {
-          choices <- numerical_columns(datatableData$data)
+          choices <- numerical_columns(rv$dt_data)
         }
       }
       for (var in c("x", "y")) {
@@ -511,11 +506,11 @@ function(input, output, session) {
     if (input$doPlot >= 1) {
       plot_selection <- input$plot_selection
       if (input$plot_variable_type == "1") {
-        ggplot(datatableData$data, aes_string(input$plot_one_var)) +
+        ggplot(rv$dt_data, aes_string(input$plot_one_var)) +
           plots$var_1[[plot_selection]]$plot
       }
       else if (input$plot_variable_type == "2") {
-        ggplot(datatableData$data, aes_string(input$plot_two_var_x, input$plot_two_var_y)) +
+        ggplot(rv$dt_data, aes_string(input$plot_two_var_x, input$plot_two_var_y)) +
           plots$var_2[[plot_selection]]$plot
       }
     }
@@ -526,13 +521,13 @@ function(input, output, session) {
   })
   
   # ------------------------------------------------------------------------- #
-  # data table update only on changes to datatableData$data
+  # data table update only on changes to rv$dt_data
   # ------------------------------------------------------------------------- #
   
-  observeEvent(datatableData$data, {
+  observeEvent(rv$dt_data, {
     output$datatable <- DT::renderDataTable(
       DT::datatable(
-        datatableData$data,
+        rv$dt_data,
         options = list(
           pageLength = 10, 
           lengthMenu = list(c(5,10,15), c("5", "10", "15")),
