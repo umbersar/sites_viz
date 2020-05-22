@@ -68,9 +68,9 @@ dashboardPage(
             #--------------#
             box (
               width = 12,
-              title = "Data Summary",
+              title = "DataTable Data Summary",
               selectizeInput(
-                inputId = "summary_attr", 
+                inputId = "summary_col", 
                 label = "Select a column to see its summary.", 
                 choices = NULL, 
                 selected = "",
@@ -113,7 +113,7 @@ dashboardPage(
               
               # select column to provide a basis for filtering
               selectizeInput(
-                inputId = "filter_attr", 
+                inputId = "filter_col", 
                 label = "Filter Dataset By Column", 
                 choices = NULL, 
                 selected = "",
@@ -172,7 +172,7 @@ dashboardPage(
               title = "Plot Selection",
               # plot selection
               selectizeInput(
-                inputId = "plot_variable_type", 
+                inputId = "plot_var_type", 
                 label = "Number of Variables", 
                 choices = c("1", "2"), 
                 selected = "1",
