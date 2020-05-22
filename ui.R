@@ -105,20 +105,33 @@ dashboardPage(
             width = 5,
             title = "Dataset Selection and Filtering",
             
-            # morphology selection
+            # dataset selection
             selectizeInput(
               inputId = "dataset", 
               label = "Select a Dataset", 
               choices = datasets, 
-              selected = "o_elevation",
+              selected = "",
               multiple = FALSE
             ),
+            
+            actionButton("doLoad", "Load Dataset"),
+            
+            # drop columns
+            selectizeInput(
+              inputId = "drop_cols", 
+              label = "Select Columns to Drop", 
+              choices = NULL, 
+              multiple = TRUE
+            ),
+            
+            actionButton("doDrop", "Drop Selected Columns"),
             
             # decide if we need to apply filtering or not
             checkboxInput("filter_checkbox", 
                           "Filter Data?", 
                           value = FALSE, 
                           width = "100%"),
+            
             selectizeInput(
               inputId = "filter_attr", 
               label = "Filter Dataset By Column", 
@@ -161,6 +174,7 @@ dashboardPage(
           box(
             title = "Data Display -- Filtered Dataset",
             DT::dataTableOutput('morph_data'),
+            uiOutput("downloadUI"),
             id = "datatable",
             width = 7,
             solidHeader = TRUE

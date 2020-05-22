@@ -8,6 +8,7 @@ library(leaflet.extras)
 library(leafgl)
 library(sf)
 library(sp)
+library(DT)
 
 plots <- list(
   var_1 =list(
@@ -78,6 +79,10 @@ function(input, output, session) {
   plotData <- reactiveValues(
     numerical_columns = NULL
   )
+  datatableData <- reactiveValues(
+    data = NULL,
+    dataX = NULL
+  )
   
   # ------------------------------------------------------------------------- #
   # reactive function for loading lab results for the 
@@ -85,13 +90,13 @@ function(input, output, session) {
   # ------------------------------------------------------------------------- #
   
   # load whole morphology dataset from .csv file
-  loadData <- reactive({
+  loadData <- eventReactive(input$doLoad, {
     data <- read.csv(stringr::str_interp("data/${input$dataset}.csv"))
-    filtered <- data %>%
-      select_if(function(col) return(!col_has_val(col)))
-    if ("morphology_attribute" %in% names(filtered)) {
-      filtered %>% select(-"morphology_attribute")
-    }
+    # filtered <- data %>%
+    #   select_if(function(col) return(!col_has_val(col)))
+    # if ("morphology_attribute" %in% names(filtered)) {
+    #   filtered %>% select(-"morphology_attribute")
+    # }
     # data init
     layerID$ids <- list()
     data_of_click$clickedMarker <- list()
@@ -100,18 +105,76 @@ function(input, output, session) {
     mapData$pts <- NULL
     mapData$coordinates <- NULL
     plotData$numerical_columns <- NULL
+    datatableData$data <- data %>% select(-"X")
+    datatableData$dataX <- data
+    # update select input for drop_cols
+    updateSelectizeInput(
+      session, "drop_cols", 
+      choices = names(datatableData$data)
+    )
+    
+    # create download button for data table
+    output$downloadUI <- renderUI({
+      tagList() %>%
+        tagAppendChild(p()) %>% # space
+        tagAppendChild(
+          p(
+            class='text-center', 
+            downloadButton("download", "Download Current DataTable")
+          )
+        )
+    })
+    # bind download button with downloadHandler
+    output$download = downloadHandler('data.csv', content = function(file) {
+      s = input$morph_data_rows_all
+      write.csv(datatableData$data[s, , drop = FALSE], file)
+    })
     
     # return
-    return(filtered)
+    return(data)
   })
   
-  # filter out the "X" column to give us the morphology data
-  morphData <- reactive({
-    return(loadData() %>% select(-"X"))
+  observeEvent(input$doDrop, {
+    req(loadData())
+    # if we are displaying data points in selected areas
+    # then drop based on current set of data points
+    if (length(data_of_click$clickedMarker) > 0 ) {
+      datatableData$data <- datatableData$dataX %>% 
+        select(-input$drop_cols) %>%
+        select(-"X")
+    }
+    else { # otherwise drop based on the original dataset
+      datatableData$data <- datatableData$dataX %>% 
+        select(-input$drop_cols) %>% 
+        select(-"X")
+    }
+    # if (length(input$drop_cols) == 0) {
+    #   datatableData$dataX <- loadData()
+    #   datatableData$data <- datatableData$dataX %>% select(-"X")
+    # }
+    # else {
+    #   # if we are displaying data points in selected areas
+    #   # then drop based on current set of data points
+    #   if (length(data_of_click$clickedMarker) > 0 ) {
+    #     datatableData$data <- datatableData$dataX %>% 
+    #       select(-input$drop_cols) %>%
+    #       select(-"X")
+    #   }
+    #   else { # otherwise drop based on the original dataset
+    #     datatableData$data <- datatableData$dataX %>% 
+    #       select(-input$drop_cols) %>% 
+    #       select(-"X")
+    #   }
+    # }
   })
+  
+  # # filter out the "X" column to give us the morphology data
+  # morphData <- reactive({
+  #   return(loadData() %>% select(-"X"))
+  # })
   
   # select only the "X", long, and lat columns as map data
-  loadMapData <- reactive({
+  loadMapData <- eventReactive(loadData(), {
     d <- loadData()
     data <- na.omit(select(d, "X", longitude, latitude))
     pts <- st_as_sf(data, coords=c(longitude, latitude))
@@ -120,58 +183,49 @@ function(input, output, session) {
   
   # after the morphology dataset has been loaded, we load
   observeEvent(loadData(), {
-    choices <- unique(names(morphData()))
+    choices <- unique(names(datatableData$data))
     updateSelectInput(session, "filter_attr", choices = choices)
     updateSelectInput(session, "summary_attr", choices = choices)
   })
   
   # load the unqiue values present in a morph attribute column
   # according to the selection of filter attribute
-  filterOptions <- reactive({
-    req(input$filter_attr)
-    unique(select(morphData(), input$filter_attr))
-  })
   # trigger shiny to update choices for the selectizeInput, "filter_val"
-  observeEvent(filterOptions(), {
-    choices <- filterOptions()
-    updateSelectInput(session, "filter_val", choices = choices)
+  observeEvent(input$filter_attr, {
+    req(input$filter_attr)
+    choices <- unique(select(datatableData$dataX, input$filter_attr))
+    cat(length(choices))
+    updateSelectizeInput(session, "filter_val", choices = choices)
   })
   
   observeEvent(input$summary_attr, {
     output$summary <- renderText(
       paste(
-        names(summary(morphData()[[input$summary_attr]])),
-        summary(morphData()[[input$summary_attr]]),
+        names(summary(datatableData$data[[input$summary_attr]])),
+        summary(datatableData$data[[input$summary_attr]]),
         sep = ": ",
         collapse = "\n"
       )
     )
   })
   
-  output$morph_data <- DT::renderDataTable({
-    if (input$filter_checkbox) {
-      DT::datatable(
-        dplyr::filter(morphData(), (!!sym(input$filter_attr)) == input$filter_val), 
-        options = list(
-          pageLength = 10, 
-          scrollX = TRUE,
-          ordering = FALSE,
-          autoWidth = TRUE,
-          info = FALSE
-        )
-      )
-    } else {
-      DT::datatable(
-        morphData(),
-        options = list(
-          pageLength = 10, 
-          scrollX = TRUE,
-          ordering = FALSE,
-          autoWidth = TRUE,
-          info = FALSE
-        )
-      )
-    }
+  # filter data
+  observeEvent(input$filter_checkbox, {
+    output$morph_data <- DT::renderDataTable({
+      if (input$filter_checkbox) {
+        datatableData$dataX <- loadData() %>% 
+          dplyr::filter((!!sym(input$filter_attr)) == input$filter_val)
+        cat(names(datatableData$dataX))
+        datatableData$data <- datatableData$dataX %>% 
+          select(-input$drop_cols) %>%
+          select(-"X")
+      } else {
+        datatableData$dataX <- loadData()
+        datatableData$data <- datatableData$dataX %>% 
+          select(-input$drop_cols) %>%
+          select(-"X")
+      }
+    })
   })
   
   # ------------------------------------------------------------------------- #
@@ -249,11 +303,6 @@ function(input, output, session) {
       location_id_colname = "X"
     )
     
-    cat("length of layerID before adding: ")
-    cat(length(layerID$ids))
-    cat("\n")
-    cat("\n")
-    
     for (id in found_in_bounds) {
       if (id %in% data_of_click$clickedMarker) {
         # do not add id
@@ -270,17 +319,14 @@ function(input, output, session) {
     
     # display selected data points in the data table
     if (length(data_of_click$clickedMarker) > 0) {
-      renderTable(
-        loadData() %>%
-        subset(X %in% data_of_click$clickedMarker) %>%
+      # filter dataX
+      datatableData$dataX <- datatableData$dataX %>% 
+        subset(X %in% data_of_click$clickedMarker)
+      # display data by dropping X
+      datatableData$data <- datatableData$dataX %>%
+        select(-input$drop_cols) %>%
         select(-"X")
-      )
     }
-    
-    cat("length of layerID after adding: ")
-    cat(length(layerID$ids))
-    cat("\n")
-    cat("\n")
     
     # look up data points by ids found
     selected <- subset(mapData$data, X %in% found_in_bounds)
@@ -312,10 +358,6 @@ function(input, output, session) {
       # remove second layer representing selected locations
       proxy <- leafletProxy("morph_map")
       
-      cat("to delete layer id: ")
-      cat(layerID$ids[[ as.character(bounded_layer_ids[1]) ]])
-      cat("\n")
-      
       # remove deleted points
       for (id in bounded_layer_ids) {
         key <- as.character(id)
@@ -334,7 +376,10 @@ function(input, output, session) {
       # populate data table with original dataset 
       # in case there are no data points selected
       if (length(data_of_click$clickedMarker) == 0) {
-        renderTable(morphData())
+        datatableData$dataX <- loadData()
+        datatableData$data <- datatableData$dataX %>% 
+          select(-input$drop_cols) %>%
+          select(-"X")
       }
     }
   })
@@ -406,20 +451,12 @@ function(input, output, session) {
     req(input$plot_variable_type)
     choices = NULL
     if (input$plot_variable_type == "1") {
-      cat("one variable!")
-      cat("\n")
       choices <- names(plots$var_1)
     }
     else if (input$plot_variable_type == "2") {
-      cat("two variables!")
-      cat("\n")
       choices <- names(plots$var_2)
     }
-    cat("update start")
-    cat("\n")
     updateSelectInput(session, "plot_selection", choices = choices)
-    cat("update end")
-    cat("\n")
   })
   
   # initialise an input tag list
@@ -427,18 +464,18 @@ function(input, output, session) {
   # create column inputs
   
   
-  createColumnInputs <- reactive({
+  createColumnInputs <- eventReactive(loadData(), {
     req(input$plot_variable_type)
     req(input$plot_selection)
     if (input$plot_variable_type == "1") {
       inputId <- "plot_one_var"
       inputLabel <- "Select a Column as Input"
       # set inputTagList
-      choices <- names(morphData())
+      choices <- names(datatableData$data)
       type <- plots$var_1[[input$plot_selection]]$type
       if (!is.null(type)) {
         if (type == "numerics") {
-          choices <- numerical_columns(morphData())
+          choices <- numerical_columns(datatableData$data)
         }
       }
       inputTagList <<- tagSetChildren(
@@ -453,12 +490,11 @@ function(input, output, session) {
     else if (input$plot_variable_type == "2") {
       newInputs = list();
       choices <- NULL;
-      choices <- names(morphData())
+      choices <- names(datatableData$data)
       type <- plots$var_2[[input$plot_selection]]$type
-      cat(type)
       if(!is.null(type)) {
         if (type == "numerics") {
-          choices <- numerical_columns(morphData())
+          choices <- numerical_columns(datatableData$data)
         }
       }
       for (var in c("x", "y")) {
@@ -482,16 +518,15 @@ function(input, output, session) {
   })
   
   generatePlot <- eventReactive(input$doPlot, {
-    cat(input$doPlot)
     # req(input$plot_selection)
     if (input$doPlot >= 1) {
       plot_selection <- input$plot_selection
       if (input$plot_variable_type == "1") {
-        ggplot(morphData(), aes_string(input$plot_one_var)) +
+        ggplot(datatableData$data, aes_string(input$plot_one_var)) +
           plots$var_1[[plot_selection]]$plot
       }
       else if (input$plot_variable_type == "2") {
-        ggplot(morphData(), aes_string(input$plot_two_var_x, input$plot_two_var_y)) +
+        ggplot(datatableData$data, aes_string(input$plot_two_var_x, input$plot_two_var_y)) +
           plots$var_2[[plot_selection]]$plot
       }
     }
@@ -501,11 +536,14 @@ function(input, output, session) {
     generatePlot()
   })
   
-  # render table helper
-  renderTable <- function(data) {
+  # ------------------------------------------------------------------------- #
+  # data table update only on changes to datatableData$data
+  # ------------------------------------------------------------------------- #
+  
+  observeEvent(datatableData$data, {
     output$morph_data <- DT::renderDataTable(
       DT::datatable(
-        data,
+        datatableData$data,
         options = list(
           pageLength = 10, 
           scrollX = TRUE,
@@ -515,9 +553,13 @@ function(input, output, session) {
         )
       )
     )
-  }
+  })
   
+  # ------------------------------------------------------------------------- #
   # helper functions
+  # ------------------------------------------------------------------------- #
+  
+  # return numerical columns in the given "data" data table  
   numerical_columns <- function(data) {
     if (is.null(plotData$numerical_columns)) {
       plotData$numerical_columns <- names(select_if(data, function(col) return(
