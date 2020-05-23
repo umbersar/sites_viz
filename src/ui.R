@@ -77,7 +77,11 @@ dashboardPage(
                 multiple = FALSE
               ),
               p("Summary: "),
-              verbatimTextOutput("summary")
+              conditionalPanel("output.show_summary", verbatimTextOutput("summary")),
+              actionButton(
+                "summary_button",
+                "Show Summary"
+              )
             )
           ),
           
@@ -95,13 +99,13 @@ dashboardPage(
               # drop columns
               selectizeInput(
                 inputId = "drop_cols", 
-                label = "Select Columns to Drop", 
+                label = "Select Columns to Hide", 
                 choices = NULL, 
                 multiple = TRUE
               ),
               
               # do drop button
-              actionButton("doDrop", "Drop Selected Columns")
+              actionButton("doDrop", "Hide Selected Columns")
             ),
             
             box(
@@ -112,7 +116,7 @@ dashboardPage(
               conditionalPanel(
                 condition = "output.show_geo_nas",
                 DT::dataTableOutput("geo_nas_dt")
-              ) 
+              )
             )
           )
         ),
@@ -126,7 +130,7 @@ dashboardPage(
             #----------------------#
             box(
               title = "Geolocation Map",
-              leafletOutput("geo_map", width = "100%", height = "540px"),
+              leafletOutput("geo_map", width = "100%", height = "450px"),
               width = 12
             ),
             
@@ -154,6 +158,12 @@ dashboardPage(
                 multiple = FALSE
               ),
               
+              radioButtons(
+                inputId = "filter_target", 
+                label = "Apply Filter To", 
+                choices = c("Whole Dataset" = "dataset", "Current DataTable" = "datable"),
+                selected = "dataset"
+              ),
               # filter button
               actionButton("doFilter", "Apply Filter")
             )

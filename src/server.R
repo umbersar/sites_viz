@@ -51,6 +51,7 @@ function(input, output, session) {
   rv <- reactiveValues(
     geo_nas = NULL,
     show_geo_nas = FALSE,
+    show_summary = FALSE,
     map_layer_ids = list(),
     map_selected = list(),
     map_overlaps = list(),
@@ -64,8 +65,13 @@ function(input, output, session) {
     dt_data = NULL
   )
   
+  # output values for conditionalPanels
   output$show_geo_nas <- reactive({
     rv$show_geo_nas
+  })
+  
+  output$show_summary <- reactive({
+    rv$show_summary
   })
   
   #############################################################################
@@ -89,6 +95,7 @@ function(input, output, session) {
     data <- na.omit(data)
     # 2. init rv$*
     rv$show_geo_nas <- FALSE
+    rv$show_summary <- FALSE
     rv$map_layer_ids <- list()
     rv$map_selected <- list()
     rv$map_shapes <- list()
@@ -123,7 +130,6 @@ function(input, output, session) {
       tagList() %>%
         tagAppendChild(
           p(
-            class='text-center',
             paste0(
               "There are ",
               nrow(rv$geo_nas),
@@ -132,10 +138,7 @@ function(input, output, session) {
           )
         ) %>%
         tagAppendChild(
-          p(
-            class='text-center',
-            actionButton("geo_nas_button", "Show Missing Geolocations")
-          )
+          p(actionButton("geo_nas_button", "Show Missing Geolocations"))
         )
     })
 
@@ -240,7 +243,6 @@ function(input, output, session) {
     }
   })
   
-  
   #############################################################################
   ############################## observeEvents ################################
   #############################################################################
@@ -251,7 +253,8 @@ function(input, output, session) {
   # and also input$filter_val
   observeEvent(rv$dt_data, {
     req(loadData())
-    # only update when we are not in the process of filtering
+    # only use rv$dt_data to update main data table 
+    # when we are not in the process of filtering
     if (!rv$filter_flag) {
       cols <- unique(names(rv$dt_data))
       updateSelectizeInput(session, "filter_col", choices = cols)
@@ -265,6 +268,19 @@ function(input, output, session) {
           choices = vals[[ cols[[1]] ]]
         )
       }
+    }
+  })
+  
+  
+  # observe input$doDrop
+  # ------------------------------
+  # drop columns as specified in input$drop_cols
+  # this applies for both geo_nas dt and main dt
+  observeEvent(input$doDrop, {
+    req(loadData())
+    if (input$doDrop >= 1) {
+      update_dt_data(rv$dt_data_x)
+      geo_nas_table()
     }
   })
   
@@ -327,18 +343,6 @@ function(input, output, session) {
     }
   })
   
-  
-  # observe input$doDrop
-  # --------------------
-  # drop columns as specified in input$drop_cols
-  # this applies for both geo_nas dt and main dt
-  observeEvent(input$doDrop, {
-    req(loadData())
-    update_dt_data(rv$dt_data_x)
-    geo_nas_table()
-  })
-  
-  
   # observe input$summary_col
   # --------------------------
   observeEvent(input$summary_col, {
@@ -352,7 +356,19 @@ function(input, output, session) {
     )
   })
   
-  # observe input$
+  observeEvent(input$summary_button, {
+    req(loadData())
+    rv$show_summary <- !rv$show_summary
+    outputOptions(output, "show_summary", suspendWhenHidden = FALSE)
+    if (rv$show_summary) {
+      updateActionButton(session, "summary_button", label = "Hide Summary")
+    }
+    else {
+      updateActionButton(session, "summary_button", label = "Show Summary")
+    }
+  })
+  
+  # observe input$geo_nas_button
   observeEvent(input$geo_nas_button, {
     rv$show_geo_nas <- !rv$show_geo_nas
     outputOptions(output, "show_geo_nas", suspendWhenHidden = FALSE)
@@ -365,16 +381,6 @@ function(input, output, session) {
     else {
       updateActionButton(session, "geo_nas_button", label = "Shoow Incomplete Geolocations")
     }
-
-    # if (rv$geo_nas_appended) {
-    # 
-    # }
-    # else {
-    #   updateActionButton(session, "geo_nas_button", label = "Show Incomplete Geolocations")
-    #   removeUI(
-    #     selector = "#geo_nas_dt"
-    #   )
-    # }
   }
   )
   
@@ -709,7 +715,7 @@ function(input, output, session) {
         rv$dt_data,
         options = list(
           pageLength = 10, 
-          lengthMenu = list(c(5,10,15), c("5", "10", "15")),
+          lengthMenu = list(c(5,10,15,20), c("5", "10", "15", "20")),
           scrollX = TRUE,
           ordering = FALSE,
           autoWidth = TRUE,
@@ -738,8 +744,15 @@ function(input, output, session) {
   
   apply_filter_helper <- function() {
     # -- highlight map -- #
-    d <- loadData() %>%
-      dplyr::filter((!!sym(input$filter_col)) == input$filter_val)
+    d <- NULL
+    if (input$filter_target == "dataset") {
+      d <- loadData() %>%
+        dplyr::filter((!!sym(input$filter_col)) == input$filter_val)
+    }
+    else {
+      d <- rv$dt_data_x %>%
+        dplyr::filter((!!sym(input$filter_col)) == input$filter_val)
+    }
     selected <- subset(
       rv$map_data,
       X %in% d$X
@@ -765,10 +778,19 @@ function(input, output, session) {
     leafletProxy("geo_map") %>%
       removeGlPoints("filtered")
     # -- restore DT -- #
-    update_dt_data(
-      loadData() %>%
-        subset(X %in% findZoom(input$geo_map_bounds, rv$map_coords, "X"))
-    )
+    if (length(rv$map_selected) > 0) {
+      update_dt_data(
+        loadData() %>%
+          subset(X %in% rv$map_selected) %>%
+          subset(X %in% findZoom(input$geo_map_bounds, rv$map_coords, "X"))
+      )
+    }
+    else {
+      update_dt_data(
+        loadData() %>%
+          subset(X %in% findZoom(input$geo_map_bounds, rv$map_coords, "X"))
+      )
+    }
   }
   
   update_dt_data <- function(data) {
