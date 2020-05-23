@@ -138,7 +138,7 @@ dashboardPage(
             # Filter Dataset #
             #----------------#
             box(
-              title = "Filter Dataset",
+              title = "Data Filtering",
               width = 12,
               # select column to provide a basis for filtering
               selectizeInput(
