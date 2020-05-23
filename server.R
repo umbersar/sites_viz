@@ -88,7 +88,7 @@ function(input, output, session) {
   # 4. return loaded dataset: now a df
   loadData <- eventReactive(input$doLoad, {
     # 1. load data
-    data <- read.csv(stringr::str_interp("../data/${input$dataset}.csv"))
+    data <- read.csv(stringr::str_interp("data/${input$dataset}.csv"))
     
     # 2. init rv$*
     rv$geo_nas <- subset(data, c(o_longitude_GDA94, o_latitude_GDA94) %in% NA)
