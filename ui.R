@@ -111,12 +111,13 @@ dashboardPage(
             box(
               width = 12,
               title = "Missing Geolocations",
-              uiOutput("geo_nas"),
-              
+              textOutput("geo_nas_summary"),
               conditionalPanel(
                 condition = "output.show_geo_nas",
                 DT::dataTableOutput("geo_nas_dt")
-              )
+              ),
+              p(),
+              actionButton("geo_nas_button", "Show Missing Geolocations")
             )
           )
         ),

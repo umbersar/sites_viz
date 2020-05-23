@@ -126,21 +126,14 @@ function(input, output, session) {
         )
     })
     
-    output$geo_nas <- renderUI({
-      tagList() %>%
-        tagAppendChild(
-          p(
-            paste0(
-              "There are ",
-              nrow(rv$geo_nas),
-              " rows with incomplete geolocations"
-            )
-          )
-        ) %>%
-        tagAppendChild(
-          p(actionButton("geo_nas_button", "Show Missing Geolocations"))
-        )
-    })
+    # 3. render summary text for geo_nas
+    output$geo_nas_summary <- renderText(
+      paste0(
+        "There are ",
+        nrow(rv$geo_nas),
+        " rows with incomplete geolocations"
+      )
+    )
 
     # 3.c. bind download button with downloadHandler
     output$download = downloadHandler('data.csv', content = function(file) {
@@ -370,6 +363,7 @@ function(input, output, session) {
   
   # observe input$geo_nas_button
   observeEvent(input$geo_nas_button, {
+    req(loadData())
     rv$show_geo_nas <- !rv$show_geo_nas
     outputOptions(output, "show_geo_nas", suspendWhenHidden = FALSE)
     if (rv$show_geo_nas) {
@@ -719,7 +713,7 @@ function(input, output, session) {
           scrollX = TRUE,
           ordering = FALSE,
           autoWidth = TRUE,
-          info = FALSE
+          dom = 'ltpir'
         )
       )
     )
@@ -737,7 +731,8 @@ function(input, output, session) {
         scrollX = TRUE,
         ordering = FALSE,
         autoWidth = TRUE,
-        info = FALSE
+        info = FALSE,
+        dom = 'ltpir'
       )
     )
   }
