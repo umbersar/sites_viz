@@ -49,6 +49,8 @@ function(input, output, session) {
   #############################################################################
   
   rv <- reactiveValues(
+    geo_nas = NULL,
+    show_geo_nas = FALSE,
     map_layer_ids = list(),
     map_selected = list(),
     map_overlaps = list(),
@@ -61,6 +63,10 @@ function(input, output, session) {
     dt_data = NULL
   )
   
+  output$show_geo_nas <- reactive({
+    rv$show_geo_nas
+  })
+  
   #############################################################################
   ################## reactive/eventReactive functions #########################
   #############################################################################
@@ -72,15 +78,14 @@ function(input, output, session) {
   # 1. load selected dataset
   # 2. init rv$*
   # 3. UI
-  #    a. populate input choices for drop_cols
-  #    b. create download button for DT
-  #    c. bind download button with downloadHandler
   # 4. return loaded dataset: now a df
   loadData <- eventReactive(input$doLoad, {
     # 1. load data
     data <- read.csv(stringr::str_interp("../data/${input$dataset}.csv"))
     
     # 2. init rv$*
+    rv$geo_nas <- subset(data, c(o_longitude_GDA94, o_latitude_GDA94) %in% NA)
+    rv$show_geo_nas <- FALSE
     rv$map_layer_ids <- list()
     rv$map_selected <- list()
     rv$map_shapes <- list()
@@ -92,13 +97,13 @@ function(input, output, session) {
     rv$dt_data <- data %>% select(-"X")
     rv$dt_data_x <- data
     
-    # 3.a. update select input for drop_cols
+    # 3. update select input for drop_cols
     updateSelectizeInput(
       session, "drop_cols", 
       choices = names(rv$dt_data)
     )
     
-    # 3.b. create download button for data table
+    # 3. create append and download buttons for data table
     output$downloadUI <- renderUI({
       tagList() %>%
         tagAppendChild(p()) %>% # space
@@ -109,12 +114,33 @@ function(input, output, session) {
           )
         )
     })
+    
+    output$geo_nas <- renderUI({
+      tagList() %>%
+        tagAppendChild(
+          p(
+            class='text-center',
+            paste0(
+              "There are ",
+              nrow(rv$geo_nas),
+              " rows with incomplete geolocations"
+            )
+          )
+        ) %>%
+        tagAppendChild(
+          p(
+            class='text-center',
+            actionButton("geo_nas_button", "Show Missing Geolocations")
+          )
+        )
+    })
+
     # 3.c. bind download button with downloadHandler
     output$download = downloadHandler('data.csv', content = function(file) {
       s = input$datatable_rows_all
       write.csv(rv$dt_data[s, , drop = FALSE], file)
     })
-    
+
     # 4 return loaded dataset: now a df
     return(data)
   })
@@ -306,11 +332,11 @@ function(input, output, session) {
   # observe input$doDrop
   # --------------------
   # drop columns as specified in input$drop_cols
+  # this applies for both geo_nas dt and main dt
   observeEvent(input$doDrop, {
     req(loadData())
-    rv$dt_data <- rv$dt_data_x %>% 
-      select(-input$drop_cols) %>% 
-      select(-"X")
+    update_dt_data(rv$dt_data_x)
+    geo_nas_table()
   })
   
   
@@ -327,8 +353,37 @@ function(input, output, session) {
     )
   })
   
+  # observe input$
+  observeEvent(input$geo_nas_button, {
+    rv$show_geo_nas <- !rv$show_geo_nas
+    outputOptions(output, "show_geo_nas", suspendWhenHidden = FALSE)
+    if (rv$show_geo_nas) {
+      updateActionButton(session, "geo_nas_button", label = "Hide Incomplete Geolocations")
+      output$geo_nas_dt <- DT::renderDataTable({
+        geo_nas_table()
+      })
+    }
+    else {
+      updateActionButton(session, "geo_nas_button", label = "Shoow Incomplete Geolocations")
+    }
+
+    # if (rv$geo_nas_appended) {
+    # 
+    # }
+    # else {
+    #   updateActionButton(session, "geo_nas_button", label = "Show Incomplete Geolocations")
+    #   removeUI(
+    #     selector = "#geo_nas_dt"
+    #   )
+    # }
+  }
+  )
   
   # observe loadData()
+  # ------------------
+  # prepare map related data: map_data, map_pts, and map_coords
+  # add leaflet map with addGlPoints (high performance)
+  # base layer has layerId of "base"
   observeEvent(loadData(), {
     map_data <- loadMapData()
     rv$map_data <- map_data$data
@@ -401,19 +456,21 @@ function(input, output, session) {
         "Overlapping detected! Please remove the last shape.",
         easyClose = TRUE
       ))
+      # keep track of those shapes that are overlaps
+      # this is used for deletion later
       rv$map_overlaps <- append(
         rv$map_overlaps,
         input$geo_map_draw_new_feature$properties$`_leaflet_id`,
         0
       )
     }
-    else {
+    else { # the newly drawn feature is not an overlap with existing features
+      # get selected
       rv$map_selected <- unique(append(rv$map_selected, found_in_bounds, 0))
-      cat("start 2")
-      cat("\n")
-      rv$map_layer_ids[as.character(found_in_bounds)] <- rv$map_layer_count 
-      cat("end 2")
-      cat("\n")
+      # update layer coount
+      rv$map_layer_count <- rv$map_layer_count + 1
+      # attach an layer id
+      rv$map_layer_ids[as.character(found_in_bounds)] <- rv$map_layer_count
       # display selected data points in the data table
       if (length(rv$map_selected) > 0) {
         # filter dataX
@@ -445,14 +502,12 @@ function(input, output, session) {
     for (feature in input$geo_map_draw_deleted_features$features) {
       # get ids for locations within the bounding shape
       if (sum(feature$properties$`_leaflet_id` %in% rv$map_overlaps) > 0) {
-        cat("overlap removal")
-        cat("\n")
         rv$map_overlaps <- rv$map_overlaps[
           !rv$map_overlaps %in% feature$properties$`_leaflet_id`
         ]
       }
       else {
-        bounded_layer_ids <- findLocations(
+        found_in_bounds <- findLocations(
           shape = feature,
           location_coordinates = rv$map_coords,
           location_id_colname = "X"
@@ -461,15 +516,16 @@ function(input, output, session) {
         # remove second layer representing selected locations
         proxy <- leafletProxy("geo_map")
         
-        if (length(bounded_layer_ids) > 0) {
-          key <- as.character(bounded_layer_ids[1])
+        if (length(found_in_bounds) > 0) {
+          key <- as.character(found_in_bounds[1])
+          print(rv$map_layer_ids[[key]])
           proxy %>% removeGlPoints(
-            layerId = as.character(rv$map_layer_ids[[ key ]])
+            layerId = as.character(rv$map_layer_ids[[key]])
           )
-          rv$map_layer_ids[as.character(bounded_layer_ids)] <- NULL
+          rv$map_layer_ids[as.character(found_in_bounds)] <- NULL
         }
         
-        ids_to_remove <- subset(rv$map_data, X %in% bounded_layer_ids)$X
+        ids_to_remove <- subset(rv$map_data, X %in% found_in_bounds)$X
         
         rv$map_selected <- rv$map_selected[
           !rv$map_selected %in% ids_to_remove
@@ -649,6 +705,20 @@ function(input, output, session) {
   # ------------------------------------------------------------------------- #
   # helper functions
   # ------------------------------------------------------------------------- #
+  geo_nas_table <- function() {
+    DT::datatable(
+      rv$geo_nas %>% select(-input$drop_cols) %>% select(-"X"),
+      options = list(
+        pageLength = 5, 
+        lengthMenu = list(c(5,10,15), c("5", "10", "15")),
+        scrollX = TRUE,
+        ordering = FALSE,
+        autoWidth = TRUE,
+        info = FALSE
+      )
+    )
+  }
+  
   update_dt_data <- function(data) {
     rv$dt_data_x <- data
     rv$dt_data <- data %>%

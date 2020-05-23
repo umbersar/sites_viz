@@ -128,6 +128,17 @@ dashboardPage(
                 selected = "",
                 multiple = FALSE
               )
+            ),
+            
+            box(
+              width = 12,
+              title = "Missing Geolocations",
+              uiOutput("geo_nas"),
+              
+              conditionalPanel(
+                condition = "output.show_geo_nas",
+                DT::dataTableOutput("geo_nas_dt")
+              ) 
             )
           )
         ),
