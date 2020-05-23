@@ -546,11 +546,21 @@ function(input, output, session) {
   observeEvent(input$geo_map_bounds, {
     # only associate map zooming and moving with dt when there are no
     # data points selected
+    req(loadData())
     if (length(rv$map_selected) ==  0) {
-      update_dt_data (
-        loadData() %>% 
-          subset(X %in% findZoom(input$geo_map_bounds, rv$map_coords, "X"))
-      )
+      if (input$filter_checkbox) {
+        update_dt_data(
+          loadData() %>%
+            subset(X %in% findZoom(input$geo_map_bounds, rv$map_coords, "X")) %>%
+            dplyr::filter((!!sym(input$filter_col)) == input$filter_val)
+        )
+      }
+      else {
+        update_dt_data (
+          loadData() %>% 
+            subset(X %in% findZoom(input$geo_map_bounds, rv$map_coords, "X"))
+        )
+      }
     }
   })
   
