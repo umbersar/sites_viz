@@ -58,6 +58,7 @@ function(input, output, session) {
     map_data = NULL,
     map_pts = NULL,
     map_coords = NULL,
+    filter_flag = FALSE,
     plot_numerical_columns = NULL,
     dt_data_x = NULL,
     dt_data = NULL
@@ -85,6 +86,8 @@ function(input, output, session) {
     
     # 2. init rv$*
     rv$geo_nas <- subset(data, c(o_longitude_GDA94, o_latitude_GDA94) %in% NA)
+    data <- na.omit(data)
+    # 2. init rv$*
     rv$show_geo_nas <- FALSE
     rv$map_layer_ids <- list()
     rv$map_selected <- list()
@@ -93,6 +96,7 @@ function(input, output, session) {
     rv$map_data <- NULL
     rv$map_pts <- NULL
     rv$map_coords <- NULL
+    rv$filter_flag <- FALSE
     rv$plot_numerical_columns <- NULL
     rv$dt_data <- data %>% select(-"X")
     rv$dt_data_x <- data
@@ -226,11 +230,11 @@ function(input, output, session) {
     if (input$doPlot >= 1) {
       plot_selection <- input$plot_selection
       if (input$plot_var_type == "1") {
-        ggplot(rv$dt_data, aes_string(input$plot_one_var)) +
+        ggplot(rv$dt_data_x, aes_string(input$plot_one_var)) +
           plots$var_1[[plot_selection]]$plot
       }
       else if (input$plot_var_type == "2") {
-        ggplot(rv$dt_data, aes_string(input$plot_two_var_x, input$plot_two_var_y)) +
+        ggplot(rv$dt_data_x, aes_string(input$plot_two_var_x, input$plot_two_var_y)) +
           plots$var_2[[plot_selection]]$plot
       }
     }
@@ -248,7 +252,7 @@ function(input, output, session) {
   observeEvent(rv$dt_data, {
     req(loadData())
     # only update when we are not in the process of filtering
-    if (!input$filter_checkbox) {
+    if (!rv$filter_flag) {
       cols <- unique(names(rv$dt_data))
       updateSelectizeInput(session, "filter_col", choices = cols)
       updateSelectizeInput(session, "summary_col", choices = cols)
@@ -285,47 +289,42 @@ function(input, output, session) {
   # update rv$dt_data_x and rv$dt_data according to 
   # input$filter_col and input$filter_val
   observeEvent(input$filter_val, {
-    if (input$filter_checkbox) {
-      if (!is.null(rv$dt_data_x)) {
-        update_dt_data(
-          rv$dt_data_x %>% 
-            dplyr::filter((!!sym(input$filter_col)) == input$filter_val)
-        )
-      }
-    } 
+
   })
   
   
   # observe input$filter_checkbox
   # -----------------------------
   # filter loaded dataset when input$filter_checkbox is checked
-  # and restore datatable to loaded dataset when input$filter_checkbox
-  # is unchecked
-  # *** note that in either case, we drop the columns that are selected
-  # in input$drop_cols
-  observeEvent(input$filter_checkbox, {
+  # and restore datatable when input$filter_checkbox is unchecked
+  # *** note that in either case, we drop the columns that are selected in input$drop_cols
+  # 1. highlight filtered data points on the map when checked
+  # 2. remove highlight when unchecked
+  # 3. 
+  observeEvent(input$doFilter, {
     req(input$filter_col)
     req(input$filter_val)
-    output$datatable <- DT::renderDataTable({
-      if (input$filter_checkbox) {
-        update_dt_data(
-          rv$dt_data_x %>% 
-            dplyr::filter((!!sym(input$filter_col)) == input$filter_val)
-        )
-      } 
-      else {
-        if (length(rv$map_selected) > 0) {
-          update_dt_data(
-            subset(loadData(), X %in% rv$map_selected)
-          )
-        } 
-        else {
-          update_dt_data(
-            loadData()
-          )
-        }
-      } 
-    })
+    
+    if (!rv$filter_flag) { # no filter, then apply filter
+      rv$filter_flag <- !rv$filter_flag
+      apply_filter_helper()
+      # update button
+      updateActionButton(
+        session,
+        "doFilter",
+        "Remove Filter"
+      )
+    }
+    else { # has filter, then drop filter
+      rv$filter_flag <- !rv$filter_flag
+      remove_filter_helper()
+      # update button
+      updateActionButton(
+        session,
+        "doFilter",
+        "Apply Filter"
+      )
+    }
   })
   
   
@@ -475,7 +474,7 @@ function(input, output, session) {
       if (length(rv$map_selected) > 0) {
         # filter dataX
         update_dt_data(
-          rv$dt_data_x %>% 
+          loadData() %>% 
             subset(X %in% rv$map_selected)
         )
       }
@@ -518,7 +517,6 @@ function(input, output, session) {
         
         if (length(found_in_bounds) > 0) {
           key <- as.character(found_in_bounds[1])
-          print(rv$map_layer_ids[[key]])
           proxy %>% removeGlPoints(
             layerId = as.character(rv$map_layer_ids[[key]])
           )
@@ -534,10 +532,19 @@ function(input, output, session) {
         # populate data table with original dataset 
         # in case there are no data points selected
         if (length(rv$map_selected) == 0) {
-          rv$dt_data_x <- loadData()
-          rv$dt_data <- rv$dt_data_x %>% 
-            select(-input$drop_cols) %>%
-            select(-"X")
+          if (rv$filter_flag) {
+            update_dt_data(
+              loadData() %>%
+                subset(X %in% findZoom(input$geo_map_bounds, rv$map_coords, "X")) %>%
+                dplyr::filter((!!sym(input$filter_col)) == input$filter_val)
+            )
+          }
+          else {
+            update_dt_data(
+              loadData() %>%
+                subset(X %in% findZoom(input$geo_map_bounds, rv$map_coords, "X"))
+            )
+          }
         }
       }
     }
@@ -548,7 +555,7 @@ function(input, output, session) {
     # data points selected
     req(loadData())
     if (length(rv$map_selected) ==  0) {
-      if (input$filter_checkbox) {
+      if (rv$filter_flag) {
         update_dt_data(
           loadData() %>%
             subset(X %in% findZoom(input$geo_map_bounds, rv$map_coords, "X")) %>%
@@ -726,6 +733,41 @@ function(input, output, session) {
         autoWidth = TRUE,
         info = FALSE
       )
+    )
+  }
+  
+  apply_filter_helper <- function() {
+    # -- highlight map -- #
+    d <- loadData() %>%
+      dplyr::filter((!!sym(input$filter_col)) == input$filter_val)
+    selected <- subset(
+      rv$map_data,
+      X %in% d$X
+    )
+    selected_pts <- st_as_sf(selected, coords = c(longitude, latitude))
+    leafletProxy("geo_map") %>%
+      addGlPoints(
+        data = selected_pts,
+        radius = 5,
+        fillOpacity = 1,
+        fillColor = "yellow",
+        weight = 3,
+        stroke = T,
+        layerId = "filtered",
+      )
+    
+    # -- update DT -- #
+    update_dt_data(d)
+  }
+  
+  remove_filter_helper <- function() {
+    # -- remove highlights -- #
+    leafletProxy("geo_map") %>%
+      removeGlPoints("filtered")
+    # -- restore DT -- #
+    update_dt_data(
+      loadData() %>%
+        subset(X %in% findZoom(input$geo_map_bounds, rv$map_coords, "X"))
     )
   }
   

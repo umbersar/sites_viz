@@ -49,7 +49,7 @@ dashboardPage(
             #--------------#
             box (
               width = 12,
-              title = "Dataset Selection and Filtering",
+              title = "Dataset Selection",
               
               # dataset selection
               selectizeInput(
@@ -101,33 +101,7 @@ dashboardPage(
               ),
               
               # do drop button
-              actionButton("doDrop", "Drop Selected Columns"),
-              
-              # decide if we need to apply filtering or not
-              checkboxInput(
-                "filter_checkbox", 
-                "Filter Data?", 
-                value = FALSE, 
-                width = "100%"
-              ),
-              
-              # select column to provide a basis for filtering
-              selectizeInput(
-                inputId = "filter_col", 
-                label = "Filter Dataset By Column", 
-                choices = NULL, 
-                selected = "",
-                multiple = FALSE
-              ),
-              
-              # select a value in the above selected column to filter
-              selectizeInput(
-                inputId = "filter_val",
-                label = "Column Value Selection",
-                choices = NULL,
-                selected = "",
-                multiple = FALSE
-              )
+              actionButton("doDrop", "Drop Selected Columns")
             ),
             
             box(
@@ -147,7 +121,6 @@ dashboardPage(
         fluidRow(
           column(
             width = left_width,
-            
             #----------------------#
             # map for geolocations #
             #----------------------#
@@ -155,12 +128,39 @@ dashboardPage(
               title = "Geolocation Map",
               leafletOutput("geo_map", width = "100%", height = "540px"),
               width = 12
+            ),
+            
+            #----------------#
+            # Filter Dataset #
+            #----------------#
+            box(
+              title = "Filter Dataset",
+              width = 12,
+              # select column to provide a basis for filtering
+              selectizeInput(
+                inputId = "filter_col", 
+                label = "Filter Dataset By Column", 
+                choices = NULL, 
+                selected = "",
+                multiple = FALSE
+              ),
+              
+              # select a value in the above selected column to filter
+              selectizeInput(
+                inputId = "filter_val",
+                label = "Column Value Selection",
+                choices = NULL,
+                selected = "",
+                multiple = FALSE
+              ),
+              
+              # filter button
+              actionButton("doFilter", "Apply Filter")
             )
           ),
           
           column(
             width = right_width,
-            
             #-------------------#
             # display datatable #
             #-------------------#
