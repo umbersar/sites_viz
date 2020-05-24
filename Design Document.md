@@ -200,12 +200,18 @@ It is useful to show/hide certain UI elements when certain events take place, li
 
 ```R
 # ui.R
+# ...
 conditionalPanel(
 	condition = "output.condition",
   p("ui elements to show/hide on output.condition")
 )
+actionButton(
+  inputId = "button_press",
+  label = "Show"
+)
 
 # server.R
+# ...
 rv <- reactiveValues(
 	condition = FALSE
 )
@@ -216,11 +222,25 @@ output$condition <- reactive({
 
 observeEvent(input$button_press, {
   rv$condition <- !rv$condition
+  if (rv$condition) {
+    updateActionButton(session, inputId = "inputId", label = "Hide")
+  }
+  else {
+    updateActionButton(session, inputId = "inputId", label = "Show")
+  }
   outputOptions(output, "condition")
 })
 ```
 
 When the `input$button` event is triggered, the code block in the observeEvent function will be executed. The change of `rv$condition`, a reactive value, will trigger the change of `output$condition`. Finally, with the API `outputOptions`, we are sending the newest value `output.condition` to the UI front-end. The UI element(s) in `conditionalPanel` will be shown or hidden according to the value of `output.condition`.
+
+Also shown in the above example is the updating of an UI element. Shiny provides APIs for updating almost all UI elements. 
+
+
+
+**To add: Dynamically generate UI elements **
+
+
 
 For more details, please refer to the official Shiny documentation. 
 
