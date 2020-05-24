@@ -12,6 +12,7 @@ The following packages are used for this project:
 * sf
 * sp
 * leafgl
+* DT
 ```
 
 **Note**
@@ -38,21 +39,27 @@ and then render the canvas. This avoids having tens of thousands of DOM elements
 
 ## Structure
 ```
-app.R
-/data
-/features
+ui.R
+server.R
+data/
+src/
 ```
 For the time being, all the datasets are provided in a `.csv` format and are 
-stored within the `/data` folder.
+stored within the `src/` folder. Every dataset has the following three columns:
 
+* `X`: index of a data point, which we use as ID for each data point
+* `o_longitude_GDA94` 
+* `o_latitude_GDA94`
 
-In the `/features` folder, you can find features that are being developed and tested, 
-such as high-performance maps and advanced data tables.
+In the `src/` folder, R scripts that ui.R and server.R depend on can be found.
 
-
-To run the app, open `app.R` in RStudio. After the file has been opened, 
+To run the app, open either `ui.R` or `server.R` in RStudio. After the file has been opened, 
 you will find a special `Run App` button on the top right corner of the script. 
 Clicking on `Run App` will start up the application. 
 
 
 Alternatively, one could use `shift + command + return` on Mac or `shift + control + enter` on Windows.
+
+
+
+For more details on the project, please refer to the design document.

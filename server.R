@@ -35,6 +35,10 @@ plots <- list(
     Smooth = list(
       type = "numerics",
       plot = geom_smooth()
+    ),
+    Line = list(
+      type = "numerics",
+      plot = geom_line(position = 'jitter')
     )
   )
 )
