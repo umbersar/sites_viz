@@ -135,7 +135,14 @@ function(input, output, session) {
       )
     )
 
-    # 3.c. bind download button with downloadHandler
+    output$download_geo_nas = downloadHandler(
+      'missing_geo.csv', 
+      content = function(file) {
+        s = input$geo_nas_dt_rows_all
+        write.csv(rv$geo_nas[s, , drop = FALSE], file)
+      }
+    )
+    # 3. bind download button with downloadHandler
     output$download = downloadHandler('data.csv', content = function(file) {
       s = input$datatable_rows_all
       write.csv(rv$dt_data[s, , drop = FALSE], file)
@@ -273,7 +280,7 @@ function(input, output, session) {
     req(loadData())
     if (input$doDrop >= 1) {
       update_dt_data(rv$dt_data_x)
-      geo_nas_table()
+      output$geo_nas_dt <- DT::renderDataTable(geo_nas_table())
     }
   })
   
@@ -720,7 +727,7 @@ function(input, output, session) {
           scrollX = TRUE,
           ordering = FALSE,
           autoWidth = TRUE,
-          dom = 'ltpir'
+          dom = 'ltipr'
         )
       )
     )
@@ -729,7 +736,7 @@ function(input, output, session) {
   # ------------------------------------------------------------------------- #
   # helper functions
   # ------------------------------------------------------------------------- #
-  geo_nas_table <- function() {
+  geo_nas_table <- eventReactive(list(input$doDrop, loadData()), {
     DT::datatable(
       rv$geo_nas %>% select(-input$drop_cols) %>% select(-"X"),
       options = list(
@@ -739,10 +746,10 @@ function(input, output, session) {
         ordering = FALSE,
         autoWidth = TRUE,
         info = FALSE,
-        dom = 'ltpir'
+        dom = 'ltipr'
       )
     )
-  }
+  })
   
   apply_filter_helper <- function() {
     # -- highlight map -- #

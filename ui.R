@@ -114,7 +114,12 @@ dashboardPage(
               textOutput("geo_nas_summary"),
               conditionalPanel(
                 condition = "output.show_geo_nas",
-                DT::dataTableOutput("geo_nas_dt")
+                DT::dataTableOutput("geo_nas_dt"),
+                p(),
+                p(
+                  class="text-center",
+                  downloadButton("download_geo_nas", "Download Missing Geolocations")
+                )
               ),
               p(),
               actionButton("geo_nas_button", "Show Missing Geolocations")
