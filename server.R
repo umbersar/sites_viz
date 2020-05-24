@@ -546,6 +546,13 @@ function(input, output, session) {
             )
           }
         }
+        # when there are still points selected, update the DT accordingly
+        else {
+          update_dt_data(
+            loadData() %>%
+              subset(X %in% rv$map_selected)
+          )
+        }
       }
     }
   })
