@@ -373,7 +373,7 @@ function(input, output, session) {
       })
     }
     else {
-      updateActionButton(session, "geo_nas_button", label = "Shoow Incomplete Geolocations")
+      updateActionButton(session, "geo_nas_button", label = "Show Incomplete Geolocations")
     }
   }
   )
