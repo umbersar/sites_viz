@@ -243,6 +243,22 @@ function(input, output, session) {
     }
   })
   
+  
+  # return geo_nas_table on data loading and columns hiding
+  geo_nas_table <- eventReactive(list(input$doDrop, loadData()), {
+    DT::datatable(
+      rv$geo_nas %>% select(-input$drop_cols) %>% select(-"X"),
+      options = list(
+        pageLength = 5, 
+        lengthMenu = list(c(5,10,15), c("5", "10", "15")),
+        scrollX = TRUE,
+        ordering = FALSE,
+        autoWidth = TRUE,
+        info = FALSE,
+        dom = 'ltipr'
+      )
+    )
+  })
   #############################################################################
   ############################## observeEvents ################################
   #############################################################################
@@ -736,21 +752,6 @@ function(input, output, session) {
   # ------------------------------------------------------------------------- #
   # helper functions
   # ------------------------------------------------------------------------- #
-  geo_nas_table <- eventReactive(list(input$doDrop, loadData()), {
-    DT::datatable(
-      rv$geo_nas %>% select(-input$drop_cols) %>% select(-"X"),
-      options = list(
-        pageLength = 5, 
-        lengthMenu = list(c(5,10,15), c("5", "10", "15")),
-        scrollX = TRUE,
-        ordering = FALSE,
-        autoWidth = TRUE,
-        info = FALSE,
-        dom = 'ltipr'
-      )
-    )
-  })
-  
   apply_filter_helper <- function() {
     # -- highlight map -- #
     d <- NULL
