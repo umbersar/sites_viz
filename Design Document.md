@@ -48,47 +48,13 @@ Data is only loaded after the `Load Dataset` button is clicked.
 In the `DataTable Data Summary` section, we have a dropdown select input whose options are the names of the columns in the main datatable. After a column has been selected, by clicking on the `Show Summary` button, a basic statistical summary of the selected column will show up. 
 
 
-  <p style="text-align: center">
-    <img src="./images/data_summary_before_click.png"/>
-    <br>
-    <em>DataTable Data Summary - Before Click</em>
-  </p>
-  <p style="text-align: center">
-    <img src="./images/data_summary_after_click.png"/>
-    <br>
-    <em>DataTable Data Summary - Before Click</em>
-  </p>
-
-
 As can be seen from the figures above, when the `Show Summary` button is clicked, the button text changes to `Hide Summary`.
 
 ### Dataset Trimming
 
 As all the data points come from relational data tables, it is understandable that not every column is going to be meaningful. Moreover, some datasets might contain too many columns, distracting a user from focusing on the ones that matter. Therefore, we want to offer the user the flexibility to hide any columns of his or her choice.  
 
-
-  <p style="text-align:center;">
-    <img src="./images/data_trim_before.png"/>
-    <br>
-    <em>Dataset Trimming - Before Click</em>
-  </p>
-  <p style="text-align:center;">
-    <img src="./images/data_trim_dt_before.png"/>
-    <br>
-    <em>DataTable - Before Trimming</em>
-  </p>
-
-  <p style="text-align:center;">
-    <img src="./images/data_trim_after.png"/>
-    <br>
-    <em>Dataset Trimming - After Click</em>
-  </p>
-  <p style="text-align:center;">
-    <img src="./images/data_trim_dt_after.png"/>
-    <br>
-    <em>DataTable  - After Trimming</em>
-  </p>
-
+In the dashboard, by selecting the names of the columns and clicking on the `Hide Selected Columns` button, the selected columns will be hidden. This applies to both datatables in the dashboard. When the download button is clicked, only the current visible columns will be included.
 
 To undo the "data trimming", simply remove all the selected columns and click the `Hide Selected Columns` afterwards.
 
@@ -267,16 +233,58 @@ For more details, please refer to the official Shiny documentation.
   <em>Reactivity Diagram</em>
 </p>
 
-Besides getting each component to work smoothly and fast, another tricky thing about the dashboard is the relationships between the different components. 
+Besides getting each component to work smoothly and fast even with a large set of data points (more on this later), another tricky thing about the dashboard is the relationship between the different components. In the above diagram, we can see how the major components interconnect with each other. 
 
+In contrast to static data, Shiny has this concept of reactive values. With reactive values, in combination of obsevers, we have a very intuitive pattern of automatically do something as those reactive values change.
 
+```R
+# server.R
+rv <- reactiveValues(
+	data = list()
+)
 
-
-
-```html
-<p style="text-align:center;">
-  <img src="./images/geo_map_normal.png"/>
-  <br>
-  <em></em>
-</p>
+observeEvent(rv$data, {
+  # do something
+})
 ```
+
+In the above code snippet, whenever the reactive value `rv$data` gets changed, the code block surrounded by the curly braces inside the observeEvent will be executed.  
+
+In our dashboard, when a dataset is loaded, the central reactive data (i.e. reactive values) will be initialised. The changes in the cenral reactive data are initiated by all the events that take place in the dashboard, like the pressing of certain buttons. When the central reactive data changes, other parts that reply on the reactive data will be updatedd accordingly and automatically with the help of the `observeEvent` observer.  
+
+For more on reactivity, please refer to the following materials:
+
+* https://shiny.rstudio.com/articles/reactivity-overview.html
+* https://mastering-shiny.org/why-reactivity.html
+
+### Interactive Geolocations Map
+
+The map provided in the dashboard is powered by the JavaScript package `leaflet`. Combined with the package `leaflet.extras` package, we can create a map with drawing tools straight out of the box. More importantly, when a shape gets drawn or deleted, or when the map is zoomed or moved, the `leaflet` map sends events to `server.R`. By handling these events, we are then able to then create a fully interactive map. For example, when a new shape is drawn on the map, by handling the drawing event, which provides the bounds of the newly drawn shape, we are then able to filter out only those data points that are in the included in the newly drawn shape. Other events work in a similar manner. 
+
+<p style="text-align:center;">
+  <image src="./images/geo_map_zoom.gif"></image>
+  <br>
+  <em>Geo Map - Zoom In and Out</em>
+</p>
+
+<p style="text-align:center;">
+  <image src="./images/geo_map_selection.gif"></image>
+  <br>
+  <em>Geo Map - Selection</em>
+</p>
+
+<p style="text-align:center;">
+  <image src="./images/geo_map_deletion.gif"></image>
+  <br>
+  <em>Geo Map - Deletion</em>
+</p>
+As these shapes are drawn or deleted, the main datatable will update as well as these events have triggered the reactive values to update.
+
+One major problem with `leaflet`, however, is its performance. Each shape, this includes points and markers, is its own independent HTML element. As the map runs on the client side, when we have tens of thousands of data points, it will simply overwhelming for the browser to both render the tens of thousands of HTML elements and be responsive. To get around this problem, the package `leafgl`, currently still under development, is used. With the package `leafgl`, each layer is regarded as a complete unit. This means, we can simply add data points to a layer to avoid having too many HTML elements. 
+
+Moreover, the package `sp` is used for finding out which data points are included in a selected region quickly. For more information, please refer to the following sources:
+
+* https://cran.r-project.org/web/packages/sp/vignettes/over.pdf
+* https://github.com/r-spatial/leafgl
+* https://rstudio.github.io/leaflet/shiny.html
+
