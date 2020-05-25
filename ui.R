@@ -216,7 +216,7 @@ dashboardPage(
               ),
               
               # provide columns for the selected graph
-              uiOutput("allInputs")
+              uiOutput("plotInputs")
             )
           ),
           

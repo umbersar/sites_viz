@@ -726,7 +726,7 @@ function(input, output, session) {
   # create column inputs
   
   observeEvent(createPlotInputs(), {
-    output$allInputs <- renderUI({createPlotInputs()})
+    output$plotInputs <- renderUI({createPlotInputs()})
   })
   
   output$plot_output <- renderPlot({
