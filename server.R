@@ -109,7 +109,7 @@ function(input, output, session) {
     rv$map_coords <- NULL
     rv$filter_flag <- FALSE
     rv$plot_numerical_columns <- NULL
-    rv$dt_data <- data %>% dplyr::select(-"X")
+    rv$dt_data <- data[,!(names(data) %in% c("X"))]
     rv$dt_data_x <- data
     
     # 3. update select input for drop_cols
@@ -167,7 +167,7 @@ function(input, output, session) {
   # 4. return a list of data and pts
   loadMapData <- eventReactive(loadData(), {
     d <- loadData()
-    data <- na.omit(dplyr::select(d, "X", longitude, latitude))
+    data <- na.omit(d[, names(d) %in% c("X", longitude, latitude)])
     pts <- st_as_sf(data, coords=c(longitude, latitude))
     return(list(data=data, pts=pts))
   })
@@ -250,8 +250,10 @@ function(input, output, session) {
   
   # return geo_nas_table on data loading and columns hiding
   geo_nas_table <- eventReactive(list(input$doDrop, loadData()), {
+    d <-rv$geo_nas[, !(names(rv$geo_nas) %in% input$drop_cols)]
+    d <- rv$geo_nas[, !(names(rv$geo_nas) %in% c("X"))]
     DT::datatable(
-      rv$geo_nas %>% dplyr::select(-input$drop_cols) %>% dplyr::select(-"X"),
+      d,
       options = list(
         pageLength = 5, 
         lengthMenu = list(c(5,10,15), c("5", "10", "15")),
@@ -809,9 +811,8 @@ function(input, output, session) {
   
   update_dt_data <- function(data) {
     rv$dt_data_x <- data
-    rv$dt_data <- data %>%
-      dplyr::select(-input$drop_cols) %>%
-      dplyr::select(-"X")
+    d <- rv$dt_data_x[,!(names(rv$dt_data_x) %in% input$drop_cols)]
+    rv$dt_data <- d[, !(names(d) %in% c("X"))]
   }
   
   
