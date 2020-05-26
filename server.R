@@ -93,10 +93,12 @@ function(input, output, session) {
     # 1. load data
     p <- paste(getwd(), "data", "${input$dataset}.csv", sep=.Platform$file.sep)
     data <- read.csv(stringr::str_interp(p))
+    data[[longitude]] <- as.numeric(data[[longitude]])
+    data[[latitude]] <- as.numeric(data[[latitude]])
     
     # 2. init rv$*
     rv$geo_nas <- subset(data, c(o_longitude_GDA94, o_latitude_GDA94) %in% NA)
-    data <- na.omit(data)
+    data <- subset(data, (!c(o_longitude_GDA94, o_latitude_GDA94) %in% NA))
     # 2. init rv$*
     rv$show_geo_nas <- FALSE
     rv$show_summary <- FALSE
@@ -166,8 +168,7 @@ function(input, output, session) {
   # 3. create sf object pts
   # 4. return a list of data and pts
   loadMapData <- eventReactive(loadData(), {
-    d <- loadData()
-    data <- na.omit(d[, names(d) %in% c("X", longitude, latitude)])
+    data <- na.omit(select(loadData(), "X", longitude, latitude))
     pts <- st_as_sf(data, coords=c(longitude, latitude))
     return(list(data=data, pts=pts))
   })
@@ -412,7 +413,7 @@ function(input, output, session) {
   # prepare map related data: map_data, map_pts, and map_coords
   # add leaflet map with addGlPoints (high performance)
   # base layer has layerId of "base"
-  observeEvent(loadData(), {
+  observeEvent(loadMapData(), {
     map_data <- loadMapData()
     rv$map_data <- map_data$data
     rv$map_pts <- map_data$pts
