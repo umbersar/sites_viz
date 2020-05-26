@@ -2,8 +2,8 @@ library(shiny)
 library(shinydashboard)
 library(ggplot2)
 library(leaflet)
-source("src/elements.R")
-source("src/datasets.R")
+source(paste(getwd(), "src", "elements.R", sep=.Platform$file.sep))
+source(paste(getwd(), "src", "datasets.R", sep=.Platform$file.sep))
 
 # parameters and variables
 left_width <- 5
