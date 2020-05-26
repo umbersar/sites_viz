@@ -109,7 +109,7 @@ function(input, output, session) {
     rv$map_coords <- NULL
     rv$filter_flag <- FALSE
     rv$plot_numerical_columns <- NULL
-    rv$dt_data <- data %>% select(-"X")
+    rv$dt_data <- data %>% dplyr::select(-"X")
     rv$dt_data_x <- data
     
     # 3. update select input for drop_cols
@@ -167,7 +167,7 @@ function(input, output, session) {
   # 4. return a list of data and pts
   loadMapData <- eventReactive(loadData(), {
     d <- loadData()
-    data <- na.omit(select(d, "X", longitude, latitude))
+    data <- na.omit(dplyr::select(d, "X", longitude, latitude))
     pts <- st_as_sf(data, coords=c(longitude, latitude))
     return(list(data=data, pts=pts))
   })
@@ -251,7 +251,7 @@ function(input, output, session) {
   # return geo_nas_table on data loading and columns hiding
   geo_nas_table <- eventReactive(list(input$doDrop, loadData()), {
     DT::datatable(
-      rv$geo_nas %>% select(-input$drop_cols) %>% select(-"X"),
+      rv$geo_nas %>% dplyr::select(-input$drop_cols) %>% dplyr::select(-"X"),
       options = list(
         pageLength = 5, 
         lengthMenu = list(c(5,10,15), c("5", "10", "15")),
@@ -281,7 +281,7 @@ function(input, output, session) {
       updateSelectizeInput(session, "summary_col", choices = cols)
       
       if (length(cols) > 0) { # update input$filter_val
-        vals <- unique(select(rv$dt_data, cols[1]))
+        vals <- unique(dplyr::select(rv$dt_data, cols[1]))
         updateSelectizeInput(
           session, 
           "filter_val", 
@@ -310,7 +310,7 @@ function(input, output, session) {
   # update input$filter_val according to input$filter_col
   observeEvent(input$filter_col, {
     req(input$filter_col)
-    choices <- unique(select(rv$dt_data, input$filter_col))
+    choices <- unique(dplyr::select(rv$dt_data, input$filter_col))
     updateSelectizeInput(
       session, 
       "filter_val", 
@@ -810,8 +810,8 @@ function(input, output, session) {
   update_dt_data <- function(data) {
     rv$dt_data_x <- data
     rv$dt_data <- data %>%
-      select(-input$drop_cols) %>%
-      select(-"X")
+      dplyr::select(-input$drop_cols) %>%
+      dplyr::select(-"X")
   }
   
   
