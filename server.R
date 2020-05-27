@@ -90,6 +90,8 @@ function(input, output, session) {
   # 3. UI
   # 4. return loaded dataset: now a df
   loadData <- eventReactive(input$doLoad, {
+    # show toast
+    loading_notification <<- showNotification("Loading Dataset...", duration = 60)
     # 1. load data
     p <- paste(getwd(), "data", "${input$dataset}.csv", sep=.Platform$file.sep)
     data <- read.csv(stringr::str_interp(p))
@@ -153,7 +155,7 @@ function(input, output, session) {
       s = input$datatable_rows_all
       write.csv(rv$dt_data[s, , drop = FALSE], file)
     })
-
+    
     # 4 return loaded dataset: now a df
     return(data)
   })
@@ -168,7 +170,7 @@ function(input, output, session) {
   # 3. create sf object pts
   # 4. return a list of data and pts
   loadMapData <- eventReactive(loadData(), {
-    data <- na.omit(select(loadData(), "X", longitude, latitude))
+    data <- na.omit(loadData()[, names(loadData()) %in% c("X", longitude, latitude)])
     pts <- st_as_sf(data, coords=c(longitude, latitude))
     return(list(data=data, pts=pts))
   })
@@ -284,11 +286,19 @@ function(input, output, session) {
       updateSelectizeInput(session, "summary_col", choices = cols)
       
       if (length(cols) > 0) { # update input$filter_val
-        vals <- unique(dplyr::select(rv$dt_data, cols[1]))
+        # cols[1] is the column that's currently being selected
+        vals <- unique(rv$dt_data[, names(rv$dt_data) %in% as.character(cols[1])])
         updateSelectizeInput(
           session, 
           "filter_val", 
-          choices = vals[[ cols[[1]] ]]
+          choices = vals
+        )
+      }
+      else {
+        updateSelectizeInput(
+          session, 
+          "filter_val", 
+          choices = NULL
         )
       }
     }
@@ -302,8 +312,16 @@ function(input, output, session) {
   observeEvent(input$doDrop, {
     req(loadData())
     if (input$doDrop >= 1) {
-      update_dt_data(rv$dt_data_x)
-      output$geo_nas_dt <- DT::renderDataTable(geo_nas_table())
+      if (length(input$drop_cols) == (length(rv$dt_data_x)-2)) {
+        showModal(modalDialog(
+          title = "Trimming Error",
+          "Please keep at least two columns",
+          easyClose = TRUE
+        ))
+      } else {
+        update_dt_data(rv$dt_data_x)
+        output$geo_nas_dt <- DT::renderDataTable(geo_nas_table())
+      }
     }
   })
   
@@ -313,11 +331,11 @@ function(input, output, session) {
   # update input$filter_val according to input$filter_col
   observeEvent(input$filter_col, {
     req(input$filter_col)
-    choices <- unique(dplyr::select(rv$dt_data, input$filter_col))
+    choices <- unique(rv$dt_data[, names(rv$dt_data) %in% input$filter_col])
     updateSelectizeInput(
       session, 
       "filter_val", 
-      choices = choices[[input$filter_col]]
+      choices = choices
     )
   })
   
@@ -754,6 +772,7 @@ function(input, output, session) {
         )
       )
     )
+    removeNotification(loading_notification)
   })
   
   # ------------------------------------------------------------------------- #
