@@ -38,6 +38,7 @@ I would sugget future developers to look into adding each point (marker) onto a 
 and then render the canvas. This avoids having tens of thousands of DOM elements.
 
 ## Structure
+
 ```
 ui.R
 server.R
@@ -53,13 +54,16 @@ stored within the `src/` folder. Every dataset has the following three columns:
 
 In the `src/` folder, R scripts that ui.R and server.R depend on can be found.
 
-To run the app, open either `ui.R` or `server.R` in RStudio. After the file has been opened, 
-you will find a special `Run App` button on the top right corner of the script. 
-Clicking on `Run App` will start up the application. 
-
+To run the app, open either `ui.R` or `server.R` in RStudio. After the file has been opened,
+you will find a special `Run App` button on the top right corner of the script.
+Clicking on `Run App` will start up the application.
 
 Alternatively, one could use `shift + command + return` on Mac or `shift + control + enter` on Windows.
 
+To run the app in a docker container:
 
+1. Build the docker image: docker build -t my-shiny-app .
+2. And then run a container using that image:  docker run --rm -p 3838:3838 my-shiny-app
+3. The shiny app would then be accessible on the host machine at the URL: http://localhost:3838/
 
 For more details on the project, please refer to the design document.
