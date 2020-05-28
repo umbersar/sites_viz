@@ -62,8 +62,8 @@ Alternatively, one could use `shift + command + return` on Mac or `shift + contr
 
 To run the app in a docker container:
 
-1. Build the docker image: docker build -t my-shiny-app .
-2. And then run a container using that image:  docker run --rm -p 3838:3838 my-shiny-app
+1. Build the docker image: `docker build -t my-shiny-app .`
+2. And then run a container using that image:  `docker run --rm -p 3838:3838 my-shiny-app`
 3. The shiny app would then be accessible on the host machine at the URL: http://localhost:3838/
 
 For more details on the project, please refer to the design document.
